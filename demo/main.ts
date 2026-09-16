@@ -75,7 +75,16 @@ function editorExtensions(tabId: number) {
 
 function instanceFor(tabId: number, slot: HTMLElement): EditorInstance {
 	let instance = instances.get(tabId);
-	if (instance !== undefined) return instance;
+	if (instance !== undefined) {
+		// render() rebuilds the whole pane DOM from scratch on every call (splitting, closing a
+		// tab, moving one between panes, …), so an already-live editor's DOM node needs to be
+		// re-parented into its new slot - otherwise it stays attached to the now-discarded old
+		// container and the new slot renders empty. This is exactly what showed up as "split
+		// screen results in 2 non-rendered files": splitRight() moves a tab into a second group,
+		// render() rebuilds both panes' DOM, and neither editor's dom was ever moved into place.
+		slot.appendChild(instance.view.dom);
+		return instance;
+	}
 
 	const tab = workspace.tabs.find((t) => t.id === tabId)!;
 	instance = createEditorInstance({
