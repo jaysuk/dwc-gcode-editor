@@ -16,7 +16,9 @@ package's own RepRapFirmware-source citations.
 See `duet-gcode-postprocessor/docs/gcode-editor-plan.md` for the design this package implements,
 including the real, measured reasoning behind replacing Monaco and the CodeMirror 6 choice.
 
-**Status:** early scaffolding, not yet published.
+**Status:** core package built (workspace/diagnostics/language/docBuilder/editorCore), with a
+working interactive demo — clone this repo, `npm install`, `npm run dev`. Not yet published to npm,
+and not yet wired into either consuming plugin.
 
 ## License
 

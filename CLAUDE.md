@@ -18,10 +18,17 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
-**2026-09-16: repo scaffolded, nothing built yet.** `package.json`/`tsconfig.json`/
-`tsconfig.test.json`/`vitest.config.ts`/CI workflows are in place, mirroring `dwc-gcode-core`'s own
-conventions where they still apply. Depends on `dwc-gcode-core` (real dictionary/tokeniser/
-diagnostics) and CM6's `state`/`view`/`language`/`commands`/`autocomplete`/`lint` packages.
+**2026-09-16: the plan's sequencing step 2 (the package's core) is done, plus a working demo.**
+Five modules, 62 tests, all three gates green, CI confirmed on a clean runner after every push:
+`workspace.ts` (tabs/split panes, ported from `ExplorerPanel.vue` + DWC core PR #517),
+`diagnostics.ts` (`dwc-gcode-core` → `@codemirror/lint`), `language.ts` (`lexLine`-driven syntax
+highlighting), `docBuilder.ts` (chunked `Text` construction — found and fixed a real bug along the
+way, see Rule 4), `editorCore.ts` (the `flush()` contract). `demo/` (`npm run dev`) wires all five
+together into something actually clickable — verified end to end with a real 200 MB file through
+the real file picker, tabs, split view, live dirty tracking, and the "Check for errors" button, zero
+console errors. Not yet done: the windowed read-only mode for huge view-only files (Rule 5), and
+wiring this package into either real host (`duet-gcode-postprocessor`, `Flexible-Layouts` — plan's
+sequencing steps 3–4).
 
 ## What this package owns vs. what a host owns
 
@@ -49,17 +56,31 @@ diagnostics) and CM6's `state`/`view`/`language`/`commands`/`autocomplete`/`lint
    200 MB fixture, real Playwright-measured numbers, the `Text` rope structure confirmed against
    `@codemirror/state`'s own compiled source before relying on it.
 3. **Every test has teeth**: break the behaviour and watch it fail before trusting it.
-4. **A genuinely huge file opened to view/diagnose should not always cost a full CM6 `Text` build.**
+4. **`Text.append()` inserts NO separator between the two texts it joins** — verified empirically
+   (`docBuilder.ts`'s own doc comment): `Text.of(["a","b"]).append(Text.of(["c","d"]))` is
+   `"a\nbc\nd"`, fusing `b` and `c`. Any code that builds a `Text` incrementally across more than one
+   `Text.of()` call (as `docBuilder.ts` does for a chunked file read) must bridge that seam itself —
+   caught this exact way once already (a "flush early vs. flush once" test that only failed on a
+   large fixture), so treat a new incremental-build path with the same suspicion.
+5. **A genuinely huge file opened to view/diagnose should not always cost a full CM6 `Text` build.**
    The plan's stop-point 2 refinement — a truly windowed read-only mode paging from the source `Blob`
    — is real scope for this package, not an afterthought; do not let "CM6 handles it" excuse skipping
    this for the largest files.
 
 ## Commands
 
-- `npm run typecheck` — the library and its tests.
+- `npm run typecheck` — the library and its tests. `demo/` is deliberately NOT included (it's a dev
+  harness, not part of the published package) — sanity-check it by hand with
+  `npx tsc --noEmit --strict --target ES2021 --module ESNext --moduleResolution Bundler --lib ES2021,DOM,DOM.Iterable demo/main.ts`
+  if it changes.
 - `npm test` — vitest, `happy-dom` environment (unlike `dwc-gcode-core`'s plain `node` environment —
   this package's own tests mount real CM6 `EditorView` instances).
 - `npm run build` — `tsc` to `dist/`.
+- `npm run dev` — the interactive demo (`demo/`), served by Vite directly against `src/` (no build
+  step first). Wires every module together: workspace tabs/split panes, a real CM6 editor per tab
+  with highlighting + diagnostics, a "Check for errors" button, and a real file picker (exercises
+  `docBuilder.ts`'s chunked read against an actual `File`, not just synthetic text). Not part of the
+  published package.
 
 ## Releasing
 
