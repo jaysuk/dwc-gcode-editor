@@ -14,8 +14,23 @@
  * the final document first. A host must go through this `destroy()`, never `view.destroy()` directly.
  */
 
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { EditorState, Text, type Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
+
+/**
+ * Undo/redo history plus CM6's standard editing keybindings (word/line navigation, indent,
+ * delete-word, etc.) — `createEditorInstance` always includes this, unconditionally, because CM6
+ * ships none of it by default the way Monaco does. Found missing from every consumer built so far
+ * (`duet-gcode-postprocessor`'s `GcodeEditor.vue`, `Flexible-Layouts`' `GcodeCmEditor.vue`, this
+ * package's own demo) - Ctrl+Z silently did nothing in all three. Fixing it here, once, in the
+ * thing every consumer already goes through, closes it everywhere at once and makes the same class
+ * of bug structurally hard to reintroduce for a future consumer.
+ */
+const BASE_EDITING_EXTENSIONS: ReadonlyArray<Extension> = [
+	history(),
+	keymap.of([...defaultKeymap, ...historyKeymap]),
+];
 
 export interface EditorInstanceOptions {
 	doc: Text | string;
@@ -45,7 +60,10 @@ export interface EditorInstance {
 }
 
 export function createEditorInstance(options: EditorInstanceOptions): EditorInstance {
-	const state = EditorState.create({ doc: options.doc, extensions: [...(options.extensions ?? [])] });
+	const state = EditorState.create({
+		doc: options.doc,
+		extensions: [...BASE_EDITING_EXTENSIONS, ...(options.extensions ?? [])],
+	});
 	const view = new EditorView({ state, parent: options.parent });
 	let destroyed = false;
 
@@ -63,4 +81,24 @@ export function createEditorInstance(options: EditorInstanceOptions): EditorInst
 	}
 
 	return { view, flush, destroy };
+}
+
+/**
+ * A `Mod-s` (Ctrl+S / Cmd+S) keybinding that calls `onSave`, matching Monaco's own real behaviour
+ * (`MonacoEditor.vue`'s own comment: registering this as a *keymap* rather than a raw
+ * `addEventListener`-style global handler is what keeps it scoped to the editor that currently has
+ * focus — CM6's `keymap` facet, like Monaco's `addAction`, only fires while this specific editor
+ * instance is focused). `preventDefault: true` stops the browser's own "Save Page As" dialog from
+ * opening underneath. `onSave` is fire-and-forget from the keybinding's own point of view — a host
+ * whose save is async should not await anything here; it manages its own `saving` state.
+ */
+export function saveKeymap(onSave: () => void): Extension {
+	return keymap.of([{
+		key: "Mod-s",
+		preventDefault: true,
+		run: () => {
+			onSave();
+			return true;
+		},
+	}]);
 }

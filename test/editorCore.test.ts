@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { createEditorInstance } from "../src/editorCore";
+import { redo, undo } from "@codemirror/commands";
+import { describe, expect, it, vi } from "vitest";
+import { createEditorInstance, saveKeymap } from "../src/editorCore";
 
 describe("createEditorInstance", () => {
 	it("mounts with the given initial document", () => {
@@ -79,5 +80,59 @@ describe("createEditorInstance", () => {
 
 		withLanguage.destroy();
 		withoutLanguage.destroy();
+	});
+
+	it("has working undo/redo by default - the actual bug this base extension set fixes", () => {
+		// Every consumer built before this fix (duet-gcode-postprocessor's GcodeEditor.vue,
+		// Flexible-Layouts' GcodeCmEditor.vue, this package's own demo) had no history() extension
+		// at all, so Ctrl+Z silently did nothing. undo()/redo() only succeed at all if a history()
+		// extension is present in the state - this is a real, not simulated, exercise of that.
+		const instance = createEditorInstance({ doc: "G28", parent: document.createElement("div") });
+		instance.view.dispatch({ changes: { from: 3, insert: "\nG1 X10" } });
+		expect(instance.view.state.doc.toString()).toBe("G28\nG1 X10");
+
+		expect(undo(instance.view)).toBe(true);
+		expect(instance.view.state.doc.toString()).toBe("G28");
+
+		expect(redo(instance.view)).toBe(true);
+		expect(instance.view.state.doc.toString()).toBe("G28\nG1 X10");
+
+		instance.destroy();
+	});
+
+	it("has CM6's standard editing keybindings by default (e.g. Backspace)", () => {
+		// A real keyboard event through CM6's own handler, not a direct state.doc splice - proves
+		// the default keymap extension is actually wired into the view, not just present in a list.
+		const instance = createEditorInstance({ doc: "G28", parent: document.createElement("div") });
+		instance.view.dispatch({ selection: { anchor: 3 } });
+		instance.view.contentDOM.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true }));
+		expect(instance.view.state.doc.toString()).toBe("G2");
+		instance.destroy();
+	});
+});
+
+describe("saveKeymap", () => {
+	it("calls onSave when Ctrl+S is pressed while the editor has focus", () => {
+		const onSave = vi.fn();
+		const instance = createEditorInstance({
+			doc: "G28", parent: document.createElement("div"), extensions: [saveKeymap(onSave)],
+		});
+		instance.view.contentDOM.dispatchEvent(
+			new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true }),
+		);
+		expect(onSave).toHaveBeenCalledTimes(1);
+		instance.destroy();
+	});
+
+	it("does not call onSave for a plain 's' keystroke", () => {
+		const onSave = vi.fn();
+		const instance = createEditorInstance({
+			doc: "G28", parent: document.createElement("div"), extensions: [saveKeymap(onSave)],
+		});
+		instance.view.contentDOM.dispatchEvent(
+			new KeyboardEvent("keydown", { key: "s", bubbles: true, cancelable: true }),
+		);
+		expect(onSave).not.toHaveBeenCalled();
+		instance.destroy();
 	});
 });

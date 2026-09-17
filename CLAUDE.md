@@ -18,6 +18,20 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-17 (v0.2.0): `editorCore.ts` now always includes CM6's undo/redo history and default
+editing keymap.** CM6 ships neither by default (unlike Monaco, which has both built in) — this was
+found missing from every consumer built so far (`duet-gcode-postprocessor`'s `GcodeEditor.vue`,
+`Flexible-Layouts`' `GcodeCmEditor.vue`, this package's own demo), meaning Ctrl+Z silently did
+nothing anywhere. Fixed once, at the root, via a new `BASE_EDITING_EXTENSIONS` constant
+(`history()` + `keymap.of([...defaultKeymap, ...historyKeymap])`) always prepended in
+`createEditorInstance`, so every current and future consumer gets it for free. Also added
+`saveKeymap(onSave)`, a `Mod-s` binding matching Monaco's own Ctrl+S behaviour, for hosts to wire up
+real save-on-keypress instead of a toolbar-button-only save. 66 tests (was 62), verified with real
+teeth (sabotaged `BASE_EDITING_EXTENSIONS` to `[]`, confirmed the new undo/Backspace tests fail,
+then restored). Downstream: `duet-gcode-postprocessor` and `Flexible-Layouts` still need their
+`dwc-gcode-editor` dependency bumped to pick this up; `Flexible-Layouts`' `GcodeCmEditor.vue` also
+still needs `saveKeymap` wired in for real Ctrl+S support.
+
 **2026-09-16: the plan's sequencing step 2 (the package's core) is done, plus a working demo.**
 Five modules, 62 tests, all three gates green, CI confirmed on a clean runner after every push:
 `workspace.ts` (tabs/split panes, ported from `ExplorerPanel.vue` + DWC core PR #517),
