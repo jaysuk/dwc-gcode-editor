@@ -5,15 +5,16 @@
  * button. Not part of the published package — `npm run dev` only.
  */
 
-import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { lintGutter } from "@codemirror/lint";
-import { EditorView, lineNumbers } from "@codemirror/view";
+import { lineNumbers, EditorView } from "@codemirror/view";
 import { diagnoseDocument, parseDocument } from "dwc-gcode-core";
 
+import { gcodeCompletion } from "../src/completion";
 import { buildDocFromChunks, buildDocFromString } from "../src/docBuilder";
 import { applyDiagnostics, gcodeLintUi } from "../src/diagnostics";
 import { createEditorInstance, type EditorInstance } from "../src/editorCore";
 import { gcodeLanguage } from "../src/language";
+import { createThemeController, type ThemeController } from "../src/theme";
 import {
 	activeTab, canSplit, closeSplit, closeTab, createWorkspace, moveTab, openTab,
 	setActiveTab, setDirty, splitRight, tabsInGroup, type WorkspaceState,
@@ -38,6 +39,8 @@ function log(message: string): void {
 
 let workspace: WorkspaceState<TabData> = createWorkspace<TabData>({ name: "welcome", initialDoc: SAMPLE_TEXT() });
 const instances = new Map<number, EditorInstance>();
+const themeControllers = new Map<number, ThemeController>();
+const darkChk = document.getElementById("chk-dark") as HTMLInputElement;
 
 function SAMPLE_TEXT(): string {
 	return [
@@ -53,11 +56,12 @@ function SAMPLE_TEXT(): string {
 	].join("\n");
 }
 
-function editorExtensions(tabId: number) {
+function editorExtensions(tabId: number, theme: ThemeController) {
 	return [
 		lineNumbers(),
 		gcodeLanguage,
-		syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+		theme.extension,
+		gcodeCompletion(),
 		gcodeLintUi(),
 		lintGutter(),
 		// Live dirty tracking is a demo/host UI concern, not editorCore.ts's own job - that module
@@ -87,10 +91,12 @@ function instanceFor(tabId: number, slot: HTMLElement): EditorInstance {
 	}
 
 	const tab = workspace.tabs.find((t) => t.id === tabId)!;
+	const theme = createThemeController(darkChk.checked);
+	themeControllers.set(tabId, theme);
 	instance = createEditorInstance({
 		doc: tab.data.initialDoc,
 		parent: slot,
-		extensions: editorExtensions(tabId),
+		extensions: editorExtensions(tabId, theme),
 		onFlush: () => {
 			// Clears the dirty flag once the content has actually been reported back - see
 			// editorCore.ts's own doc comment for why destroy() always calls this, not just an
@@ -106,6 +112,7 @@ function instanceFor(tabId: number, slot: HTMLElement): EditorInstance {
 function destroyInstance(tabId: number): void {
 	instances.get(tabId)?.destroy();
 	instances.delete(tabId);
+	themeControllers.delete(tabId);
 }
 
 function render(): void {
@@ -261,6 +268,11 @@ document.getElementById("btn-close-split")!.addEventListener("click", () => {
 	render();
 });
 document.getElementById("btn-check")!.addEventListener("click", () => void checkForErrors());
+darkChk.addEventListener("change", () => {
+	for (const [tabId, instance] of instances) {
+		themeControllers.get(tabId)?.setDark(instance.view, darkChk.checked);
+	}
+});
 
 render();
 log("Ready. Open a real .g/.gcode file, or edit the sample tab and click Check for errors.");

@@ -18,6 +18,29 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-17 (v0.3.0): theme sync and dictionary-driven completion, the two items deferred from the
+feature-parity gap analysis.** `theme.ts` — `createThemeController(initialDark)` wraps a `Compartment`
+so a host can flip light/dark live (e.g. off DWC's `settingsStore.darkTheme`) without recreating the
+view or losing undo history; dark mode is `@codemirror/theme-one-dark`'s own official theme, checked
+against a real gap (its highlight style has no direct rule for `language.ts`'s `controlKeyword`/
+`definitionKeyword`/`lineComment` sub-tags) and confirmed via a real `EditorView`'s computed color,
+not assumption, that CM6's own tag-fallback resolves them to the parent rule regardless.
+`completion.ts` — `gcodeCompletion()`/`createGcodeCompletionSource()` turn `dwc-gcode-core`'s real
+280-entry command dictionary into command-code and (once a known command is on the line)
+parameter-letter completions, positioned entirely off `lexLine`'s own structural output (empirically
+confirmed to tolerantly lex an in-progress bare letter as a valueless param, and to extend a
+command's own `end` through such a letter or trailing whitespace) — no separate boundary-finding
+logic, and safe to run on every keystroke since it only ever lexes the current line, never the whole
+document. Deliberately does NOT complete axis letters (`X`/`Y`/`Z`/...) beyond what a command's own
+`parameters` array lists — the real allowed-axis-letter set is a private, unexported constant in
+`dwc-gcode-core`, and duplicating it by hand would be exactly the "never invent a rule" mistake this
+family avoids elsewhere. 94 tests (was 80). Not yet wired into either host's `.vue` component
+(`duet-gcode-postprocessor`, `Flexible-Layouts`) — both still need `createThemeController` wired to
+their own dark-mode setting and `gcodeCompletion()` added to `editorExtensions()`. Also not yet
+verified visually in a real browser this round (no Playwright/browser tool available this session) —
+only exercised via real `EditorView` instances and computed styles under `happy-dom`, plus the demo's
+own manual dark-mode toggle and completion wiring, which itself hasn't been clicked through live.
+
 **2026-09-17 (v0.2.0): `editorCore.ts` now always includes CM6's undo/redo history and default
 editing keymap.** CM6 ships neither by default (unlike Monaco, which has both built in) — this was
 found missing from every consumer built so far (`duet-gcode-postprocessor`'s `GcodeEditor.vue`,
