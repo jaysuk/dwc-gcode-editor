@@ -18,28 +18,45 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
-**2026-09-17 (v0.3.0): theme sync and dictionary-driven completion, the two items deferred from the
-feature-parity gap analysis.** `theme.ts` — `createThemeController(initialDark)` wraps a `Compartment`
-so a host can flip light/dark live (e.g. off DWC's `settingsStore.darkTheme`) without recreating the
-view or losing undo history; dark mode is `@codemirror/theme-one-dark`'s own official theme, checked
-against a real gap (its highlight style has no direct rule for `language.ts`'s `controlKeyword`/
-`definitionKeyword`/`lineComment` sub-tags) and confirmed via a real `EditorView`'s computed color,
-not assumption, that CM6's own tag-fallback resolves them to the parent rule regardless.
-`completion.ts` — `gcodeCompletion()`/`createGcodeCompletionSource()` turn `dwc-gcode-core`'s real
-280-entry command dictionary into command-code and (once a known command is on the line)
-parameter-letter completions, positioned entirely off `lexLine`'s own structural output (empirically
-confirmed to tolerantly lex an in-progress bare letter as a valueless param, and to extend a
-command's own `end` through such a letter or trailing whitespace) — no separate boundary-finding
-logic, and safe to run on every keystroke since it only ever lexes the current line, never the whole
-document. Deliberately does NOT complete axis letters (`X`/`Y`/`Z`/...) beyond what a command's own
-`parameters` array lists — the real allowed-axis-letter set is a private, unexported constant in
-`dwc-gcode-core`, and duplicating it by hand would be exactly the "never invent a rule" mistake this
-family avoids elsewhere. 94 tests (was 80). Not yet wired into either host's `.vue` component
-(`duet-gcode-postprocessor`, `Flexible-Layouts`) — both still need `createThemeController` wired to
-their own dark-mode setting and `gcodeCompletion()` added to `editorExtensions()`. Also not yet
-verified visually in a real browser this round (no Playwright/browser tool available this session) —
-only exercised via real `EditorView` instances and computed styles under `happy-dom`, plus the demo's
-own manual dark-mode toggle and completion wiring, which itself hasn't been clicked through live.
+**2026-09-17: v0.3.0's theme sync and completion wired into BOTH hosts, the same day** —
+`duet-gcode-postprocessor` (`GcodeEditor.vue`, commit `b6483a3`) and `Flexible-Layouts`
+(`GcodeCmEditor.vue`, commit `1118c20`) both now read the host's own `useSettingsStore().darkTheme`,
+create one `ThemeController` per live instance, and have `gcodeCompletion()` in their
+`editorExtensions()`. Real teeth in both: `getComputedStyle(...).backgroundColor` read back on the
+actual `.cm-editor` DOM node before/after a live toggle (needs `document.body.appendChild(wrapper
+.element)` first — `mountInDwc` doesn't attach by default). Found in `Flexible-Layouts`' own test: a
+plain `view.dispatch()` does NOT trigger `@codemirror/autocomplete`'s automatic popup (no "typed
+input" annotation) — use `startCompletion(view)` directly, the same command `completionKeymap`'s own
+Ctrl-Space binding calls. **Still not clicked through live in a real browser** — no Playwright/
+browser tool available in either session so far; only verified via real `EditorView`/mounted-component
+instances and computed styles under `happy-dom`. See `[[dwc-gcode-editor]]`'s memory entry for the
+full detail if this file is ever out of sync with it again.
+
+**2026-09-17 (v0.3.0, initial ship): theme sync and dictionary-driven completion added to the
+package itself**, the two items deferred from the feature-parity gap analysis. `theme.ts` —
+`createThemeController(initialDark)` wraps a `Compartment` so a host can flip light/dark live (e.g.
+off DWC's `settingsStore.darkTheme`) without recreating the view or losing undo history; dark mode is
+`@codemirror/theme-one-dark`'s own official theme, checked against a real gap (its highlight style
+has no direct rule for `language.ts`'s `controlKeyword`/`definitionKeyword`/`lineComment` sub-tags)
+and confirmed via a real `EditorView`'s computed color, not assumption, that CM6's own tag-fallback
+resolves them to the parent rule regardless. `completion.ts` —
+`gcodeCompletion()`/`createGcodeCompletionSource()` turn `dwc-gcode-core`'s real 280-entry command
+dictionary into command-code and (once a known command is on the line) parameter-letter completions,
+positioned entirely off `lexLine`'s own structural output (empirically confirmed to tolerantly lex an
+in-progress bare letter as a valueless param, and to extend a command's own `end` through such a
+letter or trailing whitespace) — no separate boundary-finding logic, and safe to run on every
+keystroke since it only ever lexes the current line, never the whole document. Deliberately does NOT
+complete axis letters (`X`/`Y`/`Z`/...) beyond what a command's own `parameters` array lists — the
+real allowed-axis-letter set is a private, unexported constant in `dwc-gcode-core`, and duplicating
+it by hand would be exactly the "never invent a rule" mistake this family avoids elsewhere. 94 tests
+(was 80).
+
+**Outstanding for this package specifically**: the windowed read-only mode for huge view-only files
+(Rule 5, never started) and a real, in-browser click-through of the demo/both hosts (blocked purely
+on tooling access, not on anything left to build). `dwc-gcode-core`'s v1.3.1 scientific-notation fix
+(2026-09-17) needed no change here — this package never re-implements dictionary-shape validation,
+it only calls `diagnoseDocument`/`commandSpec` directly, so the fix reached it for free once a host
+bumped its `dwc-gcode-core` pin.
 
 **2026-09-17 (v0.2.0): `editorCore.ts` now always includes CM6's undo/redo history and default
 editing keymap.** CM6 ships neither by default (unlike Monaco, which has both built in) — this was
