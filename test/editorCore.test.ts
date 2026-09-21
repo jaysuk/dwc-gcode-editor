@@ -111,6 +111,68 @@ describe("createEditorInstance", () => {
 	});
 });
 
+describe("BASE_EDITING_EXTENSIONS - comment toggling and bracket closing", () => {
+	it("toggles a line comment on Ctrl+/ once gcodeLanguage supplies commentTokens - defaultKeymap's Mod-/ binding was already live, just inert without this", async () => {
+		// A real keyboard event, same as the existing Backspace/Ctrl+S tests - proves the binding is
+		// really wired into the view, not just present in defaultKeymap's own list on paper.
+		const { gcodeLanguage } = await import("../src/language");
+		const instance = createEditorInstance({
+			doc: "G28", parent: document.createElement("div"), extensions: [gcodeLanguage],
+		});
+		instance.view.contentDOM.dispatchEvent(new KeyboardEvent("keydown", { key: "/", ctrlKey: true, bubbles: true, cancelable: true }));
+		expect(instance.view.state.doc.toString()).toBe("; G28");
+
+		// And back off again - the same binding toggles.
+		instance.view.contentDOM.dispatchEvent(new KeyboardEvent("keydown", { key: "/", ctrlKey: true, bubbles: true, cancelable: true }));
+		expect(instance.view.state.doc.toString()).toBe("G28");
+		instance.destroy();
+	});
+
+	it("does nothing on Ctrl+/ without gcodeLanguage - there is no commentTokens language data to work from", () => {
+		const instance = createEditorInstance({ doc: "G28", parent: document.createElement("div") });
+		instance.view.contentDOM.dispatchEvent(new KeyboardEvent("keydown", { key: "/", ctrlKey: true, bubbles: true, cancelable: true }));
+		expect(instance.view.state.doc.toString()).toBe("G28");
+		instance.destroy();
+	});
+
+	it("auto-closes { for {expression} - language.ts's own scoped closeBrackets language data", async () => {
+		const { gcodeLanguage } = await import("../src/language");
+		const { insertBracket } = await import("@codemirror/autocomplete");
+		const instance = createEditorInstance({ doc: "", parent: document.createElement("div"), extensions: [gcodeLanguage] });
+		const tr = insertBracket(instance.view.state, "{");
+		expect(tr).not.toBeNull();
+		instance.view.dispatch(tr!);
+		expect(instance.view.state.doc.toString()).toBe("{}");
+		expect(instance.view.state.selection.main.anchor).toBe(1); // cursor lands between the pair
+		instance.destroy();
+	});
+
+	it("does NOT auto-close a quote - scoped to { only, unlike closeBrackets()'s own broader default of ( [ { ' \"", async () => {
+		// A real gap this scoping avoids: M28 "file.g" would get a second quote inserted on every
+		// typed opening quote if the default bracket set (which includes '\"') were used unscoped.
+		const { gcodeLanguage } = await import("../src/language");
+		const { insertBracket } = await import("@codemirror/autocomplete");
+		const instance = createEditorInstance({ doc: "", parent: document.createElement("div"), extensions: [gcodeLanguage] });
+		expect(insertBracket(instance.view.state, "\"")).toBeNull();
+		expect(insertBracket(instance.view.state, "(")).toBeNull();
+		instance.destroy();
+	});
+
+	it("Backspace between an auto-closed { and } deletes both, via closeBracketsKeymap - not just the one deleteCharBackward would remove", async () => {
+		// closeBracketsKeymap MUST be tried before defaultKeymap for this to fire at all (see
+		// editorCore.ts's own comment on BASE_EDITING_EXTENSIONS) - listing them the other way round
+		// left every other test in this file green, since none of them exercised this exact key.
+		const { gcodeLanguage } = await import("../src/language");
+		const instance = createEditorInstance({
+			doc: "{}", parent: document.createElement("div"), extensions: [gcodeLanguage],
+		});
+		instance.view.dispatch({ selection: { anchor: 1 } }); // cursor between { and }
+		instance.view.contentDOM.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true }));
+		expect(instance.view.state.doc.toString()).toBe("");
+		instance.destroy();
+	});
+});
+
 describe("saveKeymap", () => {
 	it("calls onSave when Ctrl+S is pressed while the editor has focus", () => {
 		const onSave = vi.fn();

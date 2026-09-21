@@ -15,6 +15,7 @@
  */
 
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { EditorState, Text, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 
@@ -26,10 +27,31 @@ import { EditorView, keymap } from "@codemirror/view";
  * package's own demo) - Ctrl+Z silently did nothing in all three. Fixing it here, once, in the
  * thing every consumer already goes through, closes it everywhere at once and makes the same class
  * of bug structurally hard to reintroduce for a future consumer.
+ *
+ * `defaultKeymap` (above) already binds `Mod-/` to `toggleComment` and `Shift-Alt-a` to
+ * `toggleBlockComment` — those were always live, just inert without `language.ts`'s new
+ * `commentTokens` language data. `closeBrackets()` is genuinely new here: unlike undo/redo it is a
+ * separate opt-in `@codemirror/autocomplete` extension, not part of `defaultKeymap`, and it only
+ * closes what `language.ts`'s `closeBrackets` language data (`{` only) tells it to — see that
+ * module's own comment for why.
+ *
+ * `closeBracketsKeymap` MUST be listed before `defaultKeymap` in the combined array below, not
+ * after — verified against `@codemirror/view`'s real `buildKeymap` source (`getKeymap`'s
+ * `bindings.reduce((a, b) => a.concat(b), [])` flattens every registered keymap array in order, and
+ * `runHandlers`'s `runFor` tries each key's accumulated commands in that same order, first one
+ * returning `true` wins). `defaultKeymap`'s own Backspace binding (`deleteCharBackward`) always
+ * succeeds when there is a character to delete, so if it were listed first it would permanently mask
+ * `closeBracketsKeymap`'s Backspace binding (`deleteBracketPair`, which deletes a whole `{}` pair in
+ * one step) — the more specific handler needs first refusal, the same ordering the `codemirror`
+ * package's own `basicSetup` uses. Caught via a real teeth check: with the original (wrong) order,
+ * every existing test still passed, because none of them exercised Backspace between an auto-closed
+ * pair — see `test/editorCore.test.ts`'s own Backspace-pair-delete test, added specifically to close
+ * that gap.
  */
 const BASE_EDITING_EXTENSIONS: ReadonlyArray<Extension> = [
 	history(),
-	keymap.of([...defaultKeymap, ...historyKeymap]),
+	closeBrackets(),
+	keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap]),
 ];
 
 export interface EditorInstanceOptions {

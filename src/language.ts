@@ -84,6 +84,21 @@ interface StreamState {
 const gcodeStreamParser: StreamParser<StreamState> = {
 	startState: () => ({ cache: null }),
 
+	/**
+	 * `commentTokens` is what `@codemirror/commands`' `toggleComment` (already bound to `Mod-/` by
+	 * `defaultKeymap`, which `editorCore.ts`'s `BASE_EDITING_EXTENSIONS` always includes) reads to
+	 * know what a line comment looks like — without this, that binding was already live but had no
+	 * comment syntax to work with, so it silently did nothing. `closeBrackets` is
+	 * `@codemirror/autocomplete`'s own language-data key (`CloseBracketConfig`) for `closeBrackets()`;
+	 * scoped to `{` only (not the extension's default `["(","[","{","'",'"']`) because `{expression}`
+	 * is the only real bracket syntax in conditional G-code — auto-closing `"` would fight typing a
+	 * quoted filename argument (e.g. `M28 "file.g"`), which was never asked for.
+	 */
+	languageData: {
+		commentTokens: { line: ";" },
+		closeBrackets: { brackets: ["{"] },
+	},
+
 	token(stream, state) {
 		if (stream.sol() || state.cache === null || state.cache.raw !== stream.string) {
 			state.cache = { raw: stream.string, ranges: classifyLineForHighlight(stream.string) };

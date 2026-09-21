@@ -18,6 +18,46 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-21 (v0.4.0): four of the scope table's remaining "Keep" gaps closed** — found by re-reading
+this package's own five source modules directly against `gcode-editor-plan.md`'s scope table (not by
+trusting this file's own prior "outstanding work" summary), as part of a Monaco-feature-parity plan
+requested after `dwc-gcode-core` v1.4.0 shipped.
+
+- **Comment toggling.** `defaultKeymap` (already in `editorCore.ts`'s `BASE_EDITING_EXTENSIONS`) binds
+  `Mod-/` to `@codemirror/commands`' `toggleComment` — that binding was already live in every consumer,
+  just permanently inert with nothing to comment with. `language.ts`'s `gcodeStreamParser` now declares
+  `languageData: { commentTokens: { line: ";" } }`, so it actually inserts/removes `"; "`.
+- **Auto-close brackets for `{expression}`.** New: `@codemirror/autocomplete`'s `closeBrackets()` +
+  `closeBracketsKeymap`, added to `BASE_EDITING_EXTENSIONS`, scoped via the same `gcodeStreamParser`'s
+  new `languageData: { closeBrackets: { brackets: ["{"] } }` — deliberately narrower than the
+  extension's own default (`( [ { ' "`), since auto-closing a quote would fight typing a quoted
+  filename argument (`M28 "file.g"`), never asked for. **Found and fixed a real ordering bug while
+  building this, not just adding it**: `@codemirror/view`'s own `buildKeymap` source confirms keymap
+  array order is try-order, first command returning `true` wins per key — `closeBracketsKeymap` must
+  be listed *before* `defaultKeymap`, not after, or `defaultKeymap`'s unconditional Backspace
+  (`deleteCharBackward`) permanently masks `closeBracketsKeymap`'s pair-delete (`deleteBracketPair`).
+  The wrong order left every other test green (none exercised Backspace between an auto-closed pair)
+  — caught only by deliberately adding a test for that exact case and teeth-checking it.
+- **Word wrap, whitespace rendering.** New module `editingExtras.ts`: `gcodeLineWrapping`
+  (`EditorView.lineWrapping`, re-exported) and `gcodeWhitespaceRendering()` (`highlightWhitespace()` +
+  `highlightTrailingWhitespace()`, no config surface on either per the installed `@codemirror/view`'s
+  own `.d.ts`). Both opt-in, not folded into `BASE_EDITING_EXTENSIONS` — unlike undo/redo or comment
+  toggling, these change the document's default appearance, and Monaco itself ships both off by
+  default (`wordWrap: "off"`, `renderWhitespace: "selection"`).
+- **High-contrast theme.** `theme.ts`'s `ThemeController` gains `setHighContrast(view, enabled)`,
+  orthogonal to the existing `setDark` (not a breaking three-way replacement — neither host needed a
+  code change) — a hand-rolled pure-black/high-saturation `HighlightStyle` + `EditorView.theme()`, the
+  "basic" bar the scope table asks for (one mode, matching Monaco's most-used `hc-black`, not a
+  light+dark high-contrast pair).
+- **Indent guides deliberately NOT done here** — no official `@codemirror/*` package (only the ones
+  already installed) ships a visual indent-guide renderer; the community options would be a new,
+  unverified dependency. Left as its own open item rather than silently skipped or rushed.
+
+Still outstanding (unchanged by this release): the windowed read-only mode for huge view-only files
+(Rule 5), stop point 4 (split-view inside a Flexible-Layouts widget tile — unhit, `GcodeCmEditor.vue`
+is still single-pane), and a real in-browser click-through (blocked on tooling, not on anything left to
+build). Neither host has bumped its `dwc-gcode-editor` pin past v0.3.0 yet.
+
 **2026-09-17: v0.3.0's theme sync and completion wired into BOTH hosts, the same day** —
 `duet-gcode-postprocessor` (`GcodeEditor.vue`, commit `b6483a3`) and `Flexible-Layouts`
 (`GcodeCmEditor.vue`, commit `1118c20`) both now read the host's own `useSettingsStore().darkTheme`,

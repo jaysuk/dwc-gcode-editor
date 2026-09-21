@@ -75,6 +75,46 @@ describe("createThemeController", () => {
 		darkParent.remove();
 	});
 
+	it("setHighContrast applies a pure-black background distinct from both light and dark chrome", () => {
+		const { controller, view, parent } = mount(false);
+		const lightBg = getComputedStyle(view.dom).backgroundColor;
+
+		controller.setHighContrast(view, true);
+		const hcBg = getComputedStyle(view.dom).backgroundColor;
+		expect(hcBg).toBe("#000000");
+		expect(hcBg).not.toBe(lightBg);
+
+		view.destroy();
+		parent.remove();
+	});
+
+	it("colors the keyword tag a distinct rule under high contrast, not a fallback to default text color", () => {
+		const { controller, view, parent } = mount(false); // "G28 ; home\nG1 X10" - keyword at 0
+		const lightColor = colorAt(view, 0);
+
+		controller.setHighContrast(view, true);
+		const hcColor = colorAt(view, 0);
+
+		expect(hcColor).not.toBe("");
+		expect(hcColor).not.toBe(lightColor);
+		view.destroy();
+		parent.remove();
+	});
+
+	it("setHighContrast(false) reverts to whatever setDark mode was last set, not a fixed light default", () => {
+		const { controller, view, parent } = mount(true); // started dark
+		const darkBg = getComputedStyle(view.dom).backgroundColor;
+
+		controller.setHighContrast(view, true);
+		expect(getComputedStyle(view.dom).backgroundColor).toBe("#000000");
+
+		controller.setHighContrast(view, false);
+		expect(getComputedStyle(view.dom).backgroundColor).toBe(darkBg); // back to dark, not light
+
+		view.destroy();
+		parent.remove();
+	});
+
 	it("setDark swaps the live theme without recreating the view or losing the document/selection", () => {
 		const { controller, view, parent } = mount(false);
 		view.dispatch({ selection: { anchor: 3 } });

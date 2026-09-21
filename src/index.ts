@@ -5,3 +5,4 @@ export * from "./docBuilder.js";
 export * from "./editorCore.js";
 export * from "./theme.js";
 export * from "./completion.js";
+export * from "./editingExtras.js";
