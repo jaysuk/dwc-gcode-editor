@@ -49,14 +49,26 @@ requested after `dwc-gcode-core` v1.4.0 shipped.
   code change) — a hand-rolled pure-black/high-saturation `HighlightStyle` + `EditorView.theme()`, the
   "basic" bar the scope table asks for (one mode, matching Monaco's most-used `hc-black`, not a
   light+dark high-contrast pair).
-- **Indent guides deliberately NOT done here** — no official `@codemirror/*` package (only the ones
-  already installed) ships a visual indent-guide renderer; the community options would be a new,
-  unverified dependency. Left as its own open item rather than silently skipped or rushed.
+**2026-09-21 (v0.4.1): indent guides added — the last of the four remaining scope-table items,
+hand-rolled rather than skipped.** No official `@codemirror/*` package (only the ones already
+installed) ships a visual indent-guide renderer, and a community package would be a new, unverified
+dependency this family's own discipline argues against — so `editingExtras.ts` gained
+`gcodeIndentGuides()`, a small `ViewPlugin` built entirely from already-installed primitives
+(`@codemirror/state`'s `RangeSetBuilder`, `@codemirror/view`'s `Decoration`/`ViewPlugin`,
+`@codemirror/language`'s `getIndentUnit`). Marks the first character of every `getIndentUnit(state)`-
+wide run of LEADING whitespace with a `border-left`-styled span, skipping blank lines and the line's
+own deepest level (a depth-1 line gets zero guides — nothing to mark as an ancestor boundary). Column
+counting treats every leading space/tab as one column (not real tab-width-aware), a deliberate
+simplification since G-code macros are conventionally space-indented. 5 new tests, all mounted against
+a real `EditorView` and read back from the live DOM (`.cm-gcodeIndentGuide` element count), not
+assumed — including one that caught the loop's actual boundary behaviour was "N-1 guides for an
+N-level indent, skipping column 0 and the deepest level" rather than the "one guide per level"
+first guess. Teeth-checked (core loop stubbed to a no-op, both depth-dependent tests failed, restored).
 
-Still outstanding (unchanged by this release): the windowed read-only mode for huge view-only files
-(Rule 5), stop point 4 (split-view inside a Flexible-Layouts widget tile — unhit, `GcodeCmEditor.vue`
-is still single-pane), and a real in-browser click-through (blocked on tooling, not on anything left to
-build). Neither host has bumped its `dwc-gcode-editor` pin past v0.3.0 yet.
+Still outstanding: the windowed read-only mode for huge view-only files (Rule 5), stop point 4
+(split-view inside a Flexible-Layouts widget tile — unhit, `GcodeCmEditor.vue` is still single-pane),
+and a real in-browser click-through (blocked on tooling, not on anything left to build). Neither host
+has bumped its `dwc-gcode-editor` pin past v0.3.0 yet.
 
 **2026-09-17: v0.3.0's theme sync and completion wired into BOTH hosts, the same day** —
 `duet-gcode-postprocessor` (`GcodeEditor.vue`, commit `b6483a3`) and `Flexible-Layouts`
