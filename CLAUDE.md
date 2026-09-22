@@ -18,6 +18,26 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-22 (v0.8.0): `currentLine.ts` — a shared "you are here" line-highlight primitive**, the first
+piece of the offline file-stepper feature (`duet-gcode-postprocessor`'s own `docs/gcode-editor-plan.md`
+scope-table row: "Scrub bar / step-through tied to machine state | Build — new, offline first").
+`gcodeCurrentLine()` installs a `StateField`-backed `Decoration.line` highlight (invisible until first
+used); `setCurrentLine(view, line, {scroll?})` highlights a 1-based line and, by default, scrolls it
+centered into view. Clamps an out-of-range line rather than throwing (a host's own line-number source —
+e.g. a scrub bar bound to a stale document length — can legitimately be momentarily out of range around
+an edit or reload). The highlight is mapped through unrelated document edits (`deco.map(tr.changes)`)
+so it stays on the same physical line's own text, not a fixed line NUMBER, if the user edits elsewhere
+while stepping — the same behaviour a real debugger's breakpoint highlight has. 176 tests (was 169),
+real teeth on both the clamping and the change-mapping behaviour (both confirmed to fail when stubbed).
+One test's own fixture was wrong, not the code: a doc built with a trailing `\n` has an extra, empty
+final `Text` line after it (verified directly, not assumed) — a "last line" test using `"G28\nG1
+X10\n"` was actually testing the empty line after it, not `G1 X10`; fixed by dropping the trailing
+newline in that one fixture rather than changing the clamp logic to compensate for a self-inflicted
+off-by-one. The next piece is the actual state-tracking extension (`duet-gcode-postprocessor`'s
+`state.ts` gaining X/Y/E position, already started this session) and the stepper UI itself, both host-
+level — this package only ever gives a host the primitive to highlight/scroll to a line, never opinions
+about what drives it.
+
 **2026-09-22 (v0.7.0): user-customisable syntax colors + background, persisted to a shared SD-card
 file.** User ask: "make sure that each part of the colouring of gcodes offered by the editor can be
 changed, along with the background... stored on the SD card... site wide."

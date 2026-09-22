@@ -12,3 +12,4 @@ export * from "./quickSearchData.js";
 export * from "./quickSearch.js";
 export * from "./customTheme.js";
 export * from "./colorSchemeStorage.js";
+export * from "./currentLine.js";
