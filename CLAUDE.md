@@ -18,6 +18,50 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-22 (v0.7.0): user-customisable syntax colors + background, persisted to a shared SD-card
+file.** User ask: "make sure that each part of the colouring of gcodes offered by the editor can be
+changed, along with the background... stored on the SD card... site wide."
+
+- **`customTheme.ts` (new)**: `GcodeColorScheme` — 10 independently-settable colors (`background`,
+  `foreground`, `keyword`, `controlKeyword`, `definitionKeyword`, `propertyName`, `number`, `string`,
+  `atom`, `comment` — the last folds `language.ts`'s two comment tags, `comment`/`lineComment`, into
+  one user-facing color, since a user thinks "comment", not "CNC-bracket-comment vs. semicolon-comment").
+  `gcodeCustomTheme(colors)` builds the `HighlightStyle`/`EditorView.theme` pair from it, with a
+  luminance-based best-effort `dark` hint for CM6's own ambient behaviour. `isGcodeColorScheme` is a
+  runtime shape guard (all 10 keys present as strings) for validating an untrusted SD-card file.
+  `DEFAULT_LIGHT_COLOR_SCHEME`/`DEFAULT_DARK_COLOR_SCHEME` are independent, freshly-chosen defaults —
+  deliberately NOT required to pixel-match `theme.ts`'s existing fixed `defaultHighlightStyle`/
+  `oneDark` palettes, which stay exactly as they are for anyone who never opens the settings dialog.
+- **`colorSchemeStorage.ts` (new)**: `GCODE_EDITOR_COLORS_SD_PATH = "0:/sys/dwc-gcode-editor.colors.json"`
+  — one fixed path both hosts read/write, chosen over DWC's own `useSettingsStore().registerPluginData`
+  (real source checked first: that rides inside `0:/sys/dwc-settings.json`, per-plugin-scoped, and only
+  reaches the SD card when the user's own `settingsStorageLocal` toggle is off) in favour of
+  `Flexible-Layouts`' own already-proven direct-file pattern (`src/model/sdBackup.ts`) — genuinely
+  site-wide and guaranteed-SD regardless of that toggle. `parseColorSchemeFile`/`serializeColorSchemeFile`
+  round-trip a self-tagged (`kind`/`schemaVersion`) file; parsing returns `null` (not a thrown error)
+  for anything not recognisably this package's own file, so a host falls back to
+  `DEFAULT_COLOR_SCHEME_FILE` rather than propagate a parse failure for a file a user could have
+  hand-edited badly. This module has NO `machineStore` import — the actual SD read/write I/O is each
+  host's own job, done consistently because both call the same parse/serialize functions.
+- **`theme.ts`**: `ThemeController` gains `setCustomColors(view, {light, dark} | null)`, orthogonal to
+  `setDark`/`setHighContrast` (neither existing method's behaviour changes) — a custom scheme still
+  respects the existing dark/light toggle (switches between the user's own two palettes exactly as
+  `setDark` already switches the fixed ones), and `setHighContrast` wins when both are active (checked
+  first in `current()`) — a user who explicitly turns on the accessibility mode wants its guaranteed
+  contrast regardless of what custom colors happen to be saved, not a possibly-poor-contrast custom one.
+- 169 tests (was 148). Real teeth specifically on the precedence logic (`setHighContrast` before
+  `setCustomColors` before the fixed `setDark` palette — reverting the check order broke 5 tests at
+  once, confirming the ordering is actually load-bearing) and on `parseColorSchemeFile`'s validation
+  (skipping it broke exactly the malformed-input tests, not the valid ones). One test-writing lesson
+  repeated from earlier sessions: happy-dom's `getComputedStyle` reports colors in their original
+  `#rrggbb` form, not normalised to `rgb(...)` — caught immediately by running the tests, not assumed.
+- **Not yet wired into either host** — no toolbar settings icon, no settings dialog UI, no SD read/write
+  call, in either `duet-gcode-postprocessor` or `Flexible-Layouts` yet. Real, separate follow-up: each
+  host needs a shared, reactive, module-level "current color scheme" (loaded once, read by every open
+  editor instance's `editorExtensions()`) so saving from any one tab's settings dialog updates every
+  other open tab live — the same live-external-data-via-closure pattern `duet-gcode-postprocessor`'s
+  own `lineStateGutter(() => lineIndex)` already established, applied to this new use.
+
 **2026-09-22 (v0.6.0): the F4 code/expression quick-picker — the actual `mdi-tag-search` feature
 deferred from v0.5.0.** Two new modules, package-level only (not yet wired into either host).
 

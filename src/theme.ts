@@ -31,6 +31,7 @@ import { Compartment, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { oneDarkHighlightStyle, oneDarkTheme } from "@codemirror/theme-one-dark";
 import { tags } from "@lezer/highlight";
+import { gcodeCustomTheme, type GcodeColorScheme } from "./customTheme.js";
 
 const lightExtension: Extension = syntaxHighlighting(defaultHighlightStyle, { fallback: true });
 const darkExtension: Extension = [oneDarkTheme, syntaxHighlighting(oneDarkHighlightStyle, { fallback: true })];
@@ -95,6 +96,16 @@ export interface ThemeController {
 	 * working exactly as before — high contrast is new, additive surface, not a replacement.
 	 */
 	setHighContrast(view: EditorView, enabled: boolean): void;
+	/**
+	 * Independent of, and checked AFTER, `setHighContrast` (high contrast wins when both are set —
+	 * a user who explicitly turns on the accessibility mode wants its guaranteed contrast regardless
+	 * of what custom colors happen to be saved). When `colors` is non-null, overrides the current
+	 * `setDark` mode's fixed palette with the user's own light/dark pair, switching between
+	 * `colors.light`/`colors.dark` exactly as `setDark` already switches between the fixed palettes —
+	 * a custom scheme still respects DWC's own dark/light toggle, it just replaces what each mode
+	 * looks like. Pass `null` to revert to the fixed palettes.
+	 */
+	setCustomColors(view: EditorView, colors: { light: GcodeColorScheme; dark: GcodeColorScheme } | null): void;
 }
 
 /** A theme a host can flip reactively (e.g. from a `watch(() => settingsStore.darkTheme, ...)`) via
@@ -104,9 +115,12 @@ export function createThemeController(initialDark: boolean): ThemeController {
 	const compartment = new Compartment();
 	let dark = initialDark;
 	let highContrast = false;
+	let customColors: { light: GcodeColorScheme; dark: GcodeColorScheme } | null = null;
 
 	function current(): Extension {
-		return highContrast ? highContrastExtension : gcodeTheme(dark);
+		if (highContrast) return highContrastExtension;
+		if (customColors !== null) return gcodeCustomTheme(dark ? customColors.dark : customColors.light);
+		return gcodeTheme(dark);
 	}
 
 	return {
@@ -117,6 +131,10 @@ export function createThemeController(initialDark: boolean): ThemeController {
 		},
 		setHighContrast(view: EditorView, enabled: boolean): void {
 			highContrast = enabled;
+			view.dispatch({ effects: compartment.reconfigure(current()) });
+		},
+		setCustomColors(view: EditorView, colors: { light: GcodeColorScheme; dark: GcodeColorScheme } | null): void {
+			customColors = colors;
 			view.dispatch({ effects: compartment.reconfigure(current()) });
 		},
 	};

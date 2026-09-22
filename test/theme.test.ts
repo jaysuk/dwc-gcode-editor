@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { DEFAULT_DARK_COLOR_SCHEME, DEFAULT_LIGHT_COLOR_SCHEME } from "../src/customTheme";
 import { gcodeLanguage } from "../src/language";
 import { createThemeController, gcodeTheme } from "../src/theme";
 
@@ -110,6 +111,53 @@ describe("createThemeController", () => {
 
 		controller.setHighContrast(view, false);
 		expect(getComputedStyle(view.dom).backgroundColor).toBe(darkBg); // back to dark, not light
+
+		view.destroy();
+		parent.remove();
+	});
+
+	it("setCustomColors applies the light or dark half of the pair depending on the current setDark mode", () => {
+		const custom = {
+			light: { ...DEFAULT_LIGHT_COLOR_SCHEME, background: "#111111" },
+			dark: { ...DEFAULT_DARK_COLOR_SCHEME, background: "#222222" },
+		};
+		const { controller, view, parent } = mount(false); // starts light
+		controller.setCustomColors(view, custom);
+		expect(getComputedStyle(view.dom).backgroundColor).toBe("#111111");
+
+		controller.setDark(view, true);
+		expect(getComputedStyle(view.dom).backgroundColor).toBe("#222222");
+
+		view.destroy();
+		parent.remove();
+	});
+
+	it("setCustomColors(view, null) reverts to the fixed light/dark theme", () => {
+		const custom = { light: { ...DEFAULT_LIGHT_COLOR_SCHEME, background: "#111111" }, dark: DEFAULT_DARK_COLOR_SCHEME };
+		const { controller, view, parent } = mount(false);
+		const fixedBg = getComputedStyle(view.dom).backgroundColor;
+
+		controller.setCustomColors(view, custom);
+		expect(getComputedStyle(view.dom).backgroundColor).toBe("#111111");
+
+		controller.setCustomColors(view, null);
+		expect(getComputedStyle(view.dom).backgroundColor).toBe(fixedBg);
+
+		view.destroy();
+		parent.remove();
+	});
+
+	it("setHighContrast wins over an active custom color scheme", () => {
+		const custom = { light: { ...DEFAULT_LIGHT_COLOR_SCHEME, background: "#111111" }, dark: DEFAULT_DARK_COLOR_SCHEME };
+		const { controller, view, parent } = mount(false);
+		controller.setCustomColors(view, custom);
+		expect(getComputedStyle(view.dom).backgroundColor).toBe("#111111");
+
+		controller.setHighContrast(view, true);
+		expect(getComputedStyle(view.dom).backgroundColor).toBe("#000000"); // the fixed high-contrast background
+
+		controller.setHighContrast(view, false);
+		expect(getComputedStyle(view.dom).backgroundColor).toBe("#111111"); // custom colors resume, not the fixed theme
 
 		view.destroy();
 		parent.remove();
