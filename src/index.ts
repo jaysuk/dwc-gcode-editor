@@ -8,3 +8,5 @@ export * from "./completion.js";
 export * from "./editingExtras.js";
 export * from "./search.js";
 export * from "./editorActions.js";
+export * from "./quickSearchData.js";
+export * from "./quickSearch.js";

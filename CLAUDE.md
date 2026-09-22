@@ -18,6 +18,50 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-22 (v0.6.0): the F4 code/expression quick-picker — the actual `mdi-tag-search` feature
+deferred from v0.5.0.** Two new modules, package-level only (not yet wired into either host).
+
+- **`quickSearchData.ts`**: pure, host-agnostic data functions. `isInsideExpression` and
+  `flattenObjectModel` are ported faithfully from `@duet3d/monacotokens`'s real `providers.ts` (read
+  its actual compiled source, not guessed) — `flattenObjectModel` was already generic over `unknown`
+  there, which is exactly why this package can use it without taking on a machine-object-model
+  dependency: a host passes its own live model in as plain `unknown`, flattened into dotted paths
+  (`[0]` for every array's one representative element). `gcodeQuickSearchEntries` uses
+  `dwc-gcode-core`'s own dictionary (`COMMANDS`), not `@duet3d/monacotokens`'s separate `gcodeData`
+  table. `localVariableNames` scans the current document for `var`/`global` declarations using
+  `lexLine`'s own `meta` field to confirm a real RRF declaration (case-sensitive, properly terminated)
+  before extracting the name — deliberately on-demand (scanned once when the picker opens), not
+  monacotokens' own continuously-debounced background scanner, matching this package's established
+  "no background cost for a manual action" rule (`diagnostics.ts`'s own reasoning).
+- **`quickSearch.ts`**: the UI, built on CM6's `Panel` mechanism (the same primitive `search.ts`'s
+  `gcodeSearch()` already wraps via `@codemirror/search`) rather than a hand-rolled cursor-anchored
+  overlay matching Monaco's own DOM widget pixel-for-pixel. **Deliberate UX deviation**: a `Panel`
+  docks to the top of the editor, not floating near the caret — chosen because `Panel` is this
+  package's real, already-shipped mechanism for "text field drives a live-filtered, keyboard-navigable
+  list, dismiss on accept/Escape", and a cursor-anchored overlay would need a second, bespoke
+  positioning system this package doesn't otherwise have. `gcodeQuickSearchKeymap(getObjectModel?)`
+  binds `F4` and switches modes off `isInsideExpression`, exactly like `@duet3d/monacotokens`'s own
+  `addGcodeSearchAction`. `getObjectModel` is a thunk (`() => unknown`), not a static value, so a host
+  can supply an always-current live machine model without reconfiguring the extension every time it
+  changes — the same live-data-via-closure pattern `duet-gcode-postprocessor`'s own
+  `lineStateGutter(() => lineIndex)` already uses. `openGcodeQuickSearch`/`openExpressionQuickSearch`
+  are also exported standalone (e.g. for a toolbar button) and self-install their own `StateField` on
+  first use via `StateEffect.appendConfig` if `gcodeQuickSearchKeymap()` was never included — the same
+  lazy-enable mechanism `@codemirror/search`'s own `openSearchPanel` uses, verified by reading its real
+  compiled source (`searchState`'s `provide: f => showPanel.from(f, val => val.panel)`) before copying
+  the pattern rather than assuming it.
+- 148 tests (was 112), several real teeth checks on the CM6-mechanism-sensitive pieces specifically
+  (the F4 mode-switch branch, and `accept()`'s selection-replace behaviour — both confirmed to fail
+  when stubbed, not just trusted). One test's own first-draft assertion was wrong, not the
+  implementation: `flattenObjectModel` correctly does NOT emit an `[0]` sub-path for a primitive array
+  element (`tools[0].active[0]` when `active: [200]`) — only object-valued children ever get a path of
+  their own, matching the real monacotokens algorithm exactly; caught by running the test and reading
+  the real diff rather than trusting the hand-written expectation.
+- **Not yet wired into either host** — `duet-gcode-postprocessor`'s `GcodeEditor.vue` and
+  `Flexible-Layouts`' `GcodeCmEditor.vue` still only have v0.5.0's Search/Docs-link/Align-comments/
+  Revert(/Run). Wiring this in needs a live object-model source per host (`machineStore.model`) passed
+  through `gcodeQuickSearchKeymap`'s `getObjectModel` thunk — real, small, separate follow-up work.
+
 **2026-09-22 (v0.5.0): three of MonacoEditor.vue's five missing toolbar actions closed at the package
 level — search, docs-link lookup, and indent-comments alignment.** Triggered by the user asking
 directly "does the editor now have all icons DWC Monaco has? search, run file etc" — read
