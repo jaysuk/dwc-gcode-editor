@@ -114,7 +114,10 @@ function paramLetterCompletions(
 	if (typingBareLetter) {
 		from = lineFrom + last.start;
 		usedLetters = new Set(params.slice(0, -1).map((p) => p.letter.toUpperCase()));
-	} else if (context.explicit && posInLine === cmd.end && (last === undefined || last.end < posInLine)) {
+	} else if (posInLine === cmd.end && (last === undefined || last.end < posInLine)) {
+		// Right after the command (e.g. just typed the trailing space in "M280 "), nothing typed yet.
+		// Fires automatically, not just on explicit (Ctrl+Space) invocation - matches Monaco's own
+		// gcode provider (DWC's MonacoEditor.vue), which pops up the parameter list unprompted here.
 		from = context.pos;
 		usedLetters = new Set(params.map((p) => p.letter.toUpperCase()));
 	} else {

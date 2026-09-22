@@ -64,13 +64,20 @@ describe("createGcodeCompletionSource", () => {
 
 	it("excludes a parameter letter already used earlier on the same command", () => {
 		const result = source(contextFor("G1 F100 ", 8));
-		// Nothing typed yet after the trailing space - only fires on explicit invocation.
-		expect(result).toBeNull();
-		const explicitResult = source(contextFor("G1 F100 ", 8, true));
-		expect(explicitResult).not.toBeNull();
-		const labels = explicitResult!.options.map((o) => o.label);
+		expect(result).not.toBeNull();
+		const labels = result!.options.map((o) => o.label);
 		expect(labels).not.toContain("F"); // already set on this line
 		expect(labels).toContain("H");
+	});
+
+	it("offers a known command's remaining parameters automatically right after it, not just on explicit invocation", () => {
+		// Matches Monaco's own behaviour (DWC's MonacoEditor.vue): typing "M280 " and pausing shows
+		// the command's valid parameters without needing Ctrl+Space.
+		const result = source(contextFor("M280 ", 5));
+		expect(result).not.toBeNull();
+		const labels = result!.options.map((o) => o.label);
+		expect(labels).toContain("P");
+		expect(labels).toContain("S");
 	});
 
 	it("offers no parameter completions for a command the dictionary doesn't know at all", () => {

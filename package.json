@@ -1,6 +1,6 @@
 {
   "name": "dwc-gcode-editor",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "type": "module",
   "description": "Custom G-code editor core for the DuetWebControl plugin family: a CodeMirror-6-based, virtualised, huge-file-capable editor driven by dwc-gcode-core's tokeniser, dictionary and diagnostics. Framework-free — no Vue, Vuetify or DWC imports; a thin Vue wrapper per consuming plugin renders it.",
   "license": "GPL-3.0-or-later",

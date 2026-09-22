@@ -18,6 +18,19 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-22 (v0.8.1): `completion.ts`'s parameter-letter completion now fires automatically right
+after a known command, not just on explicit (Ctrl+Space) invocation.** User report, with a Monaco
+screenshot: typing `M280 ` in DWC's own Monaco editor pops up `P`/`S` unprompted; this package's
+equivalent position (`paramLetterCompletions`' "nothing typed yet" branch) required
+`context.explicit`, so the popup silently disappeared after the command-code match ended and nothing
+replaced it until the user manually invoked completion. The gate was deliberate (a dedicated test
+asserted it), just wrong relative to Monaco's own real behaviour - removed the `context.explicit &&`
+condition so the branch fires on ordinary as-you-type completion too, same as the sibling
+"typing a bare letter after the command" branch already did. 177 tests (was 176); the old test
+(`"excludes a parameter letter already used earlier on the same command"`) updated to assert the
+automatic (non-explicit) call now returns the filtered list directly, plus a new test pinned to the
+user's own `M280` repro.
+
 **2026-09-22 (v0.8.0): `currentLine.ts` — a shared "you are here" line-highlight primitive**, the first
 piece of the offline file-stepper feature (`duet-gcode-postprocessor`'s own `docs/gcode-editor-plan.md`
 scope-table row: "Scrub bar / step-through tied to machine state | Build — new, offline first").
