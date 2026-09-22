@@ -6,3 +6,5 @@ export * from "./editorCore.js";
 export * from "./theme.js";
 export * from "./completion.js";
 export * from "./editingExtras.js";
+export * from "./search.js";
+export * from "./editorActions.js";

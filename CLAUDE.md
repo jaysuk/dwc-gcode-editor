@@ -18,6 +18,52 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-22 (v0.5.0): three of MonacoEditor.vue's five missing toolbar actions closed at the package
+level — search, docs-link lookup, and indent-comments alignment.** Triggered by the user asking
+directly "does the editor now have all icons DWC Monaco has? search, run file etc" — read
+`MonacoEditor.vue`'s real toolbar (`src/components/editor/MonacoEditor.vue`) end to end rather than
+assuming, which surfaced that its `mdi-tag-search` button is NOT plain find/replace at all: it's an F4
+cursor-anchored quick-picker (`@duet3d/monacotokens`'s `duet.searchGcode`/`showGcodeSearch`/
+`showObjectModelSearch`) that lists G/M-codes, or, inside a `{expression}`, the live object model
+flattened into searchable paths. That overlay is real, separate, larger scope — deferred for the same
+reason `completion.ts` already defers object-model-aware axis completion (it needs live machine
+object-model data this package has never consumed) — and NOT what shipped here.
+
+- **`search.ts` (new): `gcodeSearch()`.** Plain Ctrl+F find/replace, genuinely missing before this
+  (no `@codemirror/search` dependency existed at all) and arguably table-stakes on its own regardless
+  of the F4 feature. Wraps `@codemirror/search`'s own `search()` extension + `searchKeymap`
+  (`Mod-f`/`F3`/`Mod-g`/etc.), re-exports `openSearchPanel` so a host's toolbar button is a single
+  import, matching `saveKeymap`'s own precedent. Opt-in, not in `BASE_EDITING_EXTENSIONS`.
+- **`editorActions.ts` (new): `codeAtCursor(view, pos?)` and `alignLineComments(view)`.**
+  `codeAtCursor` is the same `lexLine`-based command lookup `completion.ts`'s private `commandAt`
+  already does, exported standalone for a host's docs-link button (mirrors `MonacoEditor.vue`'s own
+  `cursorCode` — this package deliberately does NOT hardcode a docs URL, a host builds that itself,
+  the same split Monaco's own component has between `cursorCode` and `gcodeReferenceUrl`).
+  `alignLineComments` ports DWC's own real `utils/display.ts` `indent()` algorithm faithfully (read
+  its actual source, not guessed) but rebuilt on `lexLine`'s already-correct, quote/`{}`-aware comment
+  detection instead of reimplementing that scanning by hand, and dispatches only the per-line changes
+  that actually move (one undo step) rather than DWC's own whole-file string rebuild — which, as a
+  documented, deliberate deviation, also silently trims the file's leading/trailing blank lines as a
+  side effect of its construction method; that accidental behaviour is NOT reproduced here.
+- **Revert and Run were scoped but deliberately NOT added at this package level** — both are pure
+  host-level concerns (snapshot-and-restore for Revert; `machineStore.sendCode`/`M98` for Run) with no
+  reusable CM6-native primitive this package should own. Run additionally needed a real decision before
+  any implementation: `duet-gcode-postprocessor`'s own docs state it "deliberately has no sendCode
+  today" as a safety boundary — user confirmed (2026-09-22) Run ships in `Flexible-Layouts` only,
+  respecting that boundary rather than relitigating it.
+- 112 tests (was 97), all three gates green, several real teeth checks this round (a search test
+  first tried faking a DOM `input` event on the panel's own field — didn't work reliably; switched to
+  the documented `setSearchQuery`/`SearchQuery` state-effect API instead, the same "don't fight CM6's
+  DOM with synthetic events, use the real programmatic API" lesson `completion.ts`'s own
+  `startCompletion` gotcha already taught). `alignLineComments`' padding math was hand-computed first
+  and wrong twice (off-by-one on spaces; and two of its own test fixtures turned out to already be
+  aligned, so the first call was a legitimate no-op, not a bug) — both caught by actually running the
+  tests and correcting against real output rather than trusting the arithmetic.
+
+Still outstanding toward full Monaco toolbar parity: the F4 code/expression quick-search overlay
+(the actual `mdi-tag-search` feature, separate from plain find/replace), and Run/Revert at the host
+level (next).
+
 **2026-09-21 (v0.4.0): four of the scope table's remaining "Keep" gaps closed** — found by re-reading
 this package's own five source modules directly against `gcode-editor-plan.md`'s scope table (not by
 trusting this file's own prior "outstanding work" summary), as part of a Monaco-feature-parity plan
