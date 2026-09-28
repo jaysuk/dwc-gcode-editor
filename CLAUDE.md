@@ -18,12 +18,12 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
-**2026-09-28 (unreleased): the offline stepper as a macro-testing tool - this package's part is the line as
+**2026-09-28 (v0.9.0): the offline stepper as a macro-testing tool - this package's part is the line as
 evaluated under the current line.** Ask: step through system files and macros (not print files) from a chosen
 starting position, see each computed line as evaluated, see coordinates prominently, and test how code reacts
 to different object-model values. Most of it is NOT here - it spans three repos:
 
-- **`dwc-gcode-core` (unreleased, on top of 1.26.0)**: `stepper/simulation` - `SimulationInputs` (start position
+- **`dwc-gcode-core` (released 1.27.0, tagged and on npm; this package now depends on ^1.27.0)**: `stepper/simulation` - `SimulationInputs` (start position
   for X/Y/Z **and any other axis**, homed, tool, G91/M83; object-model paths and `param.*`; preset `global`s/`var`s;
   M291 answers), `runSimulation`, `describeStep`, `renderEvaluatedLine`, `axisReadouts`, `findReferencedInputs`,
   pure edit helpers. `walkExecution({recordEvaluation})` records each step's evaluated `{...}` params, `if`
@@ -38,22 +38,18 @@ to different object-model values. Most of it is NOT here - it spans three repos:
   now composes `StepperReadout` (source line + evaluated line, big per-axis cards with deltas, variable watch)
   and `StepperScenarioPanel` (start position, and a field per value the file reads). Scenario is saved per
   file (`...stepperScenario.<path>`), migrating the two old keys; editing the buffer re-runs the walk
-  (debounced). Neither host's `package.json` was bumped - they pin `dwc-gcode-core` ^1.23.0 and this package
-  at `v0.8.1`, so **core must be released, this package tagged, then both hosts bumped** before any of it ships.
-- **Next, in order** (nothing below is done; all four repos' work is UNCOMMITTED in their working trees):
-  1. Review `git diff` in `dwc-gcode-core`, this repo, `duet-gcode-postprocessor`, `Flexible-Layouts`; commit each
-     (co-author line per the session's attribution reminder). Run each repo's gates as separate steps you read.
-  2. Release core: bump `package.json` AND `CORE_VERSION` in `src/version.ts` (a test ties them), move CHANGELOG
-     `## Unreleased` under the new version, tag. Suggest 1.27.0. `npm publish` is manual (see core's CLAUDE.md).
-  3. This repo: bump `dwc-gcode-core` to the new version, bump `package.json` (suggest 0.9.0), tag `v0.9.0`.
-  4. Both hosts: bump `dwc-gcode-core` and `dwc-gcode-editor#v0.9.0` pins, `npm install` (this discards the
-     tarball overlays currently in their `node_modules`), rerun their suites. Postprocessor's `preheatStep` failure is a
-     pre-existing Windows CRLF-fixture issue, not this work. Flexible-Layouts's `GcodeCmEditor.vue`,
-     `GcodeStepperPanel.vue` and `gcodeCmEditor.test.ts` were converted CRLF->LF in the working tree (git sees no diff).
-  5. Real-browser check of the stepper UI (never done): axis-card layout, expansion panel, the evaluated-line block
+  (debounced). Committed in both hosts; their pins move to core ^1.27.0 and this package `v0.9.0` in a following
+  commit (see below).
+- **Done 2026-09-28**: all four repos committed; core released 1.27.0 (tag, npm); this package bumped to 0.9.0.
+  **Next, in order:**
+  1. Both hosts: bump `dwc-gcode-core` and `dwc-gcode-editor#v0.9.0` pins, `npm install`, rerun their suites.
+     Postprocessor's `preheatStep` failure is a pre-existing Windows CRLF-fixture issue, not this work.
+     Flexible-Layouts's `GcodeCmEditor.vue`, `GcodeStepperPanel.vue` and `gcodeCmEditor.test.ts` were converted
+     CRLF->LF in the working tree (git sees no diff).
+  2. Real-browser check of the stepper UI (never done): axis-card layout, expansion panel, the evaluated-line block
      widget in light/dark and a custom theme, `Tab` focus through the scenario fields. Also try `vue-tsc` on the host
      SFCs - the DWC `dwc-plugin-typecheck` harness can't resolve deps on this machine.
-  6. Deferred features: `startLine` (begin mid-file), evaluate `M291` params in the line view, model `G1 H1` homing
+  3. Deferred features: `startLine` (begin mid-file), evaluate `M291` params in the line view, model `G1 H1` homing
      moves, named scenarios per file, a "needs a value" auto-expand of the scenario panel when the walk pauses.
 - **Gotcha that cost a repair**: never `npm install --no-save ../dwc-gcode-editor` (or `../dwc-gcode-core`) into a
   host to test unreleased work. npm symlinks it, then extracts the lockfile's pinned version THROUGH the symlink
