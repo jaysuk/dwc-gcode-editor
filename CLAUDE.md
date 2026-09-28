@@ -18,6 +18,47 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-28 (later same session): first real-browser feedback on the stepper UI - toolbar decluttered,
+`StepperReadout` compacted, in both hosts.** User sent a real-browser screenshot of `GcodeCmEditor`/
+`GcodeStepperPanel` open on `homex.g` in Flexible-Layouts (the toolbar's icon order pinned it to that
+host, not `duet-gcode-postprocessor`'s own `GcodeEditor.vue` toolbar) with two things circled: the readout
+between the scrub bar and the "Scenario" accordion taking too much vertical space, and a redundant
+filename label at the toolbar's far right. Both are host-level, not this package's own files - fixed
+directly in `duet-gcode-postprocessor/src/components/` and `Flexible-Layouts/src/widgets/`, kept
+byte-identical the same way the 2026-09-28 scenario-panel redesign already was:
+
+- **Toolbar filename label removed** (`GcodeEditor.vue`'s trailing `{{ path }}` span,
+  `GcodeCmEditor.vue`'s `<v-spacer />` + `{{ basename(filename) }}` span) - it duplicated the open tab's
+  (`duet-gcode-postprocessor`) or tile's (`Flexible-Layouts`) own title. The `*`-for-dirty it also carried
+  is not lost: both hosts' Revert button is already `:disabled="!dirty"`, the same state visible a
+  different way, so nothing was added back for it.
+- **`StepperReadout.vue` compacted**: the "Line N" caption now sits inline with the source line instead
+  of on its own row (`.now-line`, flex + `min-width: 0` so a long line still wraps rather than
+  overflowing the row); axis cards shrank (`min-height` 4.25rem → 3rem, smaller letter/value/delta fonts,
+  tighter grid gap); every section's `mb-2` became `mb-1`.
+- **`GcodeStepperPanel.vue`**: the "Scenario" `v-expansion-panel`'s own title/text padding is Vuetify's
+  default, sized for a standalone accordion, not a collapsed-by-default strip under an already-dense
+  readout - added scoped `:deep()` overrides (`min-height: 2.25rem`, tighter padding) so the closed row
+  costs one compact line.
+- **Found and fixed while verifying, not left for later**: `Flexible-Layouts/src/__tests__/gcodeCmEditor.test.ts`'s
+  "shows a load error rather than throwing when the download fails" test was asserting `wrapper.text()`
+  contained `"missing.g"` - which passed only because the now-removed toolbar span rendered
+  `basename(filename)` unconditionally, never because the load-error alert's own text actually contained
+  it (its i18n key comes back untranslated in this test environment, confirmed against this same file's
+  own established pattern of asserting on raw untranslated keys elsewhere, e.g. the `...gcodeEditor.colors`
+  checks). Rewrote it to assert on the load-error alert's own raw i18n key instead of the incidental
+  filename text next to it - a real gap the toolbar cleanup exposed, not a test loosened to match the change.
+- All three edited files stayed content-identical between the two hosts (diffed post-edit, ignoring each
+  repo's own CRLF/LF line-ending convention, to confirm). Full suites green: `Flexible-Layouts` 1377
+  passed/1 pre-existing skip; `duet-gcode-postprocessor` 1179 passed/1 failed - the same pre-existing
+  Windows CRLF `preheatStep` fixture issue already on record above, untouched by this change.
+- **Not done**: the `vue-tsc` host-SFC check (the scratch-tsconfig-in-the-DWC-checkout recipe used
+  2026-09-28 for the scenario-panel redesign) - skipped as low-risk given these are template/CSS-only
+  edits with no new script identifiers on either side, but it's still the one gate this entry didn't run.
+  Neither host has been released past its `main` push (no `node scripts/release.mjs <version> --push` in
+  either) - this was a same-session fix on top of the unreleased v0.9.0 host work, not a version bump of
+  its own.
+
 **2026-09-28 (v0.9.0): the offline stepper as a macro-testing tool - this package's part is the line as
 evaluated under the current line.** Ask: step through system files and macros (not print files) from a chosen
 starting position, see each computed line as evaluated, see coordinates prominently, and test how code reacts
@@ -60,8 +101,12 @@ to different object-model values. Most of it is NOT here - it spans three repos:
   `main` (not tagged - these two repos don't tag per change, only on their own releases). Postprocessor's
   `preheatStep` failure is a pre-existing Windows CRLF-fixture issue, not this work.
   **Outstanding jobs for the simulator, in order:**
-  1. **Real-browser check (never done at all, on either host)** - happy-dom has verified the DOM shape but
-     nothing about real layout/rendering:
+  1. **Real-browser check (started 2026-09-28, later same session - a real screenshot, not a systematic
+     pass)** - happy-dom has verified the DOM shape but nothing about real layout/rendering. The user's own
+     screenshot of `StepperReadout`/`GcodeStepperPanel` on a real screen found two real defects, both fixed
+     directly in both hosts (see this file's own dated entry below) - a toolbar filename label duplicating
+     the open tab/tile's own title, and the readout costing more vertical height than the scrub bar, axis
+     cards and collapsed "Scenario" row need. The systematic pass below is still outstanding:
      - `StepperReadout`: axis-card grid wrapping, the evaluated-line block widget under the current line in
        light mode, dark mode and a custom color scheme, the "now" highlight.
      - The scenario panel redesign specifically: axis capsules and their home-icon toggle, the tool/feed/
