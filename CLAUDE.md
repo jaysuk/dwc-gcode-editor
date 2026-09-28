@@ -38,17 +38,15 @@ to different object-model values. Most of it is NOT here - it spans three repos:
   now composes `StepperReadout` (source line + evaluated line, big per-axis cards with deltas, variable watch)
   and `StepperScenarioPanel` (start position, and a field per value the file reads). Scenario is saved per
   file (`...stepperScenario.<path>`), migrating the two old keys; editing the buffer re-runs the walk
-  (debounced). Committed in both hosts; their pins move to core ^1.27.0 and this package `v0.9.0` in a following
-  commit (see below).
-- **Done 2026-09-28**: all four repos committed; core released 1.27.0 (tag, npm); this package bumped to 0.9.0.
+  (debounced). Committed in both hosts, pins bumped to core ^1.27.0 and this package `v0.9.0`.
+- **Done 2026-09-28**: all four repos committed; core 1.27.0 tagged, pushed and on npm; this package tagged `v0.9.0`
+  and pushed; both hosts bumped and `npm install`ed (real copies, no overlays), suites rerun, `vue-tsc` clean on both
+  hosts' SFCs. **The two hosts' commits are LOCAL, not pushed, and no host is released.** Postprocessor's
+  `preheatStep` failure is a pre-existing Windows CRLF-fixture issue, not this work.
   **Next, in order:**
-  1. Both hosts: bump `dwc-gcode-core` and `dwc-gcode-editor#v0.9.0` pins, `npm install`, rerun their suites.
-     Postprocessor's `preheatStep` failure is a pre-existing Windows CRLF-fixture issue, not this work.
-     Flexible-Layouts's `GcodeCmEditor.vue`, `GcodeStepperPanel.vue` and `gcodeCmEditor.test.ts` were converted
-     CRLF->LF in the working tree (git sees no diff).
-  2. Real-browser check of the stepper UI (never done): axis-card layout, expansion panel, the evaluated-line block
-     widget in light/dark and a custom theme, `Tab` focus through the scenario fields. Also try `vue-tsc` on the host
-     SFCs - the DWC `dwc-plugin-typecheck` harness can't resolve deps on this machine.
+  1. Real-browser check of the stepper UI (never done): axis-card layout, expansion panel, the evaluated-line block
+     widget in light/dark and a custom theme, `Tab` focus through the scenario fields.
+  2. Push/release the hosts once that looks right.
   3. Deferred features: `startLine` (begin mid-file), evaluate `M291` params in the line view, model `G1 H1` homing
      moves, named scenarios per file, a "needs a value" auto-expand of the scenario panel when the walk pauses.
 - **Gotcha that cost a repair**: never `npm install --no-save ../dwc-gcode-editor` (or `../dwc-gcode-core`) into a
