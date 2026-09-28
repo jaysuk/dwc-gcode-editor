@@ -18,6 +18,32 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-28 (unreleased): `dwc-gcode-core` ^1.26.0, `board.txt` support, Tab and comment-selection.**
+
+- **`boardTxt.ts` (new)**: `board.txt` is the STM32 fork's `key = value` / `key = { a, b }` file, not G-code,
+  so `gcodeLanguage` mis-coloured it. Core 1.26.0 has `parseBoardTxt`/`BOARD_TXT_KEYS` but no tokeniser and
+  problems carry a LINE, not columns, so this adds: `boardTxtLanguage` (`classifyBoardTxtLine` walks a line the
+  way the loader's `GetConfigKeys` does - comment starts `/ # ;`, key run, `=`, scalar / quoted / `{}` list, text
+  after a value only coloured if it is a comment; known key `propertyName`, unknown key deliberately
+  UNcoloured, values by table type; existing tags only, so custom/high-contrast themes need nothing),
+  `boardTxtDiagnostics(text, options)` (each problem underlines its whole line's content; `empty-array` is
+  `info`, the rest `warning` - RRF just skips the line), `boardTxtLiveLinter`, `boardTxtCompletion` (key names
+  only, inserts `= ` / `= {}` with the cursor inside the braces). `fileLanguage.ts`'s `languageForPath(path)`
+  picks it via core's `classifyFile` (`board-config` -> board.txt, `syntax: "gcode"` -> `gcodeLanguage`, else
+  `null`). All 48 real `rrfboot.txt` files from core's corpus give zero diagnostics (checked ad hoc, not a
+  committed test - it reads a sibling repo). **Not wired into either host** - a host must call
+  `languageForPath` where it now hard-codes `gcodeLanguage`.
+- **Comment a selection**: `Mod-/` already line-commented every selected line. "Block comment" needed a
+  decision: `lexLine` reads `(...)` as a comment **only in CNC mode**, so a `block: {open:"(",close:")"}`
+  token (tried first) would wrap FFF printer files in a non-comment - reverted. `Shift-Alt-a` now falls back
+  to `toggleComment` (`;` per line) via `blockCommentFallback`, listed AFTER `defaultKeymap` so a language
+  that does declare a block token still gets a real one.
+- **Tab**: CM6 binds no Tab by default, so a selection could not be indented. `indentOrInsertTab` (in
+  `BASE_EDITING_EXTENSIONS`): selection -> `indentMore` on every touched line, bare cursor -> insert one
+  `indentUnit` AT the cursor (not `insertTab`'s hard-coded `\t`, not `indentWithTab`'s indent-the-whole-line),
+  `Shift-Tab` -> `indentLess`; read-only refuses. This traps Tab for keyboard-only users - CM6's `Ctrl-m`
+  toggles it off. 245 tests (was 203); teeth on the Tab, fallback, unknown-key and list-separator paths.
+
 **2026-09-28 (unreleased): `viewState.ts` - per-file cursor + scroll persistence, ported from Fluidd's
 `FileEditor.vue`** (Monaco `saveViewState`/`restoreViewState`, keyed per file, `local`/`session`/`off`
 setting, saved on unmount/file change). Read its real source first. `captureViewState`/`restoreViewState`

@@ -73,6 +73,14 @@
       "types": "./dist/currentLine.d.ts",
       "import": "./dist/currentLine.js"
     },
+    "./boardTxt": {
+      "types": "./dist/boardTxt.d.ts",
+      "import": "./dist/boardTxt.js"
+    },
+    "./fileLanguage": {
+      "types": "./dist/fileLanguage.d.ts",
+      "import": "./dist/fileLanguage.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -100,7 +108,7 @@
     "@codemirror/theme-one-dark": "^6.1.3",
     "@codemirror/view": "^6.39.1",
     "@lezer/highlight": "^1.2.3",
-    "dwc-gcode-core": "^1.3.0"
+    "dwc-gcode-core": "^1.26.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

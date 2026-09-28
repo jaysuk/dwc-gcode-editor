@@ -14,10 +14,11 @@
  * the final document first. A host must go through this `destroy()`, never `view.destroy()` directly.
  */
 
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentLess, indentMore, toggleComment } from "@codemirror/commands";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { EditorState, Text, type Extension } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import { indentUnit } from "@codemirror/language";
+import { EditorView, keymap, type Command } from "@codemirror/view";
 import { gcodeTooltipPlacement } from "./tooltipPlacement.js";
 
 /**
@@ -49,10 +50,46 @@ import { gcodeTooltipPlacement } from "./tooltipPlacement.js";
  * pair — see `test/editorCore.test.ts`'s own Backspace-pair-delete test, added specifically to close
  * that gap.
  */
+/**
+ * `Tab` / `Shift-Tab`, which `defaultKeymap` deliberately leaves unbound (CM6 does not trap Tab by
+ * default - it is a keyboard-accessibility escape hatch), so with nothing bound a selection could not
+ * be indented at all. Matches Monaco: with a selection, `Tab` indents every selected line by one
+ * indent unit and `Shift-Tab` dedents them; with a bare cursor, `Tab` inserts one indent unit AT the
+ * cursor (unlike `indentWithTab`, which would indent the whole line from mid-line) and `Shift-Tab`
+ * dedents the line. Uses the state's `indentUnit` rather than `insertTab`'s hard-coded `"	"`, so a
+ * cursor Tab and a selection Tab agree and `gcodeIndentGuides()`'s column counting stays consistent.
+ * CM6's own `Ctrl-m` (`toggleTabFocusMode`) and `Escape` still release the trap for keyboard users.
+ */
+const indentOrInsertTab: Command = (view) => {
+	const { state } = view;
+	if (state.readOnly) return false;
+	if (state.selection.ranges.some((r) => !r.empty)) return indentMore(view);
+	view.dispatch(state.update(state.replaceSelection(state.facet(indentUnit)), { scrollIntoView: true, userEvent: "input" }));
+	return true;
+};
+
+/**
+ * `Shift-Alt-a` ("block comment") must do something useful for G-code. `defaultKeymap` binds it to
+ * `toggleBlockComment`, which needs a `block` comment token - and RRF has none in its default (FFF)
+ * mode: `lexLine` only recognises `(...)` in CNC mode, so wrapping a selection in parentheses would
+ * silently corrupt a real printer file (`G1 ( X10 )` is not a comment there). The only comment RRF has
+ * is `;` to end of line, so the honest "comment out this selection" is `toggleComment`: `;` on every
+ * selected line, and off again. Listed AFTER `defaultKeymap` so a language that does declare a block
+ * token (a host running CNC mode) still gets the real block comment first - `toggleBlockComment`
+ * returns `false` without one and falls through to here.
+ */
+const blockCommentFallback = { key: "Alt-A", mac: "Ctrl-A", run: toggleComment };
+
 const BASE_EDITING_EXTENSIONS: ReadonlyArray<Extension> = [
 	history(),
 	closeBrackets(),
-	keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap]),
+	keymap.of([
+		...closeBracketsKeymap,
+		{ key: "Tab", run: indentOrInsertTab, shift: indentLess },
+		...defaultKeymap,
+		blockCommentFallback,
+		...historyKeymap,
+	]),
 ];
 
 export interface EditorInstanceOptions {
