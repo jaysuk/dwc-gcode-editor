@@ -27,6 +27,100 @@ interface HighlightRange {
 const CONTROL_META_KEYWORDS = new Set(["if", "elif", "else", "while", "break", "continue", "abort", "skip"]);
 const DEFINITION_META_KEYWORDS = new Set(["var", "global", "set"]);
 
+/** Root names of RRF's user-variable namespaces (`global.x`, `var.x`, `param.X`, `local.x`) — coloured
+ *  like a declaration keyword so a variable reference visibly differs from an object-model path
+ *  (`move.axes[0].homed`), which is coloured as a plain property. */
+const VARIABLE_NAMESPACES = new Set(["global", "var", "param", "local"]);
+/** RRF's expression literals and its read-only special variables — never a function or a path. */
+const EXPRESSION_LITERALS = new Set(["true", "false", "null", "pi", "iterations", "result", "line", "input"]);
+
+const NUMBER_RE = /0[xX][0-9a-fA-F]+|0[bB][01]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/y;
+const isDigit = (c: string | undefined): boolean => c !== undefined && c >= "0" && c <= "9";
+const isIdentStart = (c: string | undefined): boolean => c !== undefined && /[A-Za-z_]/.test(c);
+const isIdentPart = (c: string | undefined): boolean => c !== undefined && /\w/.test(c);
+
+/**
+ * Tokenise the text of one RRF expression (`raw[from, to)`) — the body of a `{...}` parameter or of
+ * a meta line such as `if`/`while`/`var`/`set`/`echo`. `lexLine` deliberately stops at "this span is
+ * an expression" (a parameter's `kind: "expression"`, or a meta line's bare keyword), so without
+ * this every name inside stayed one flat colour, or (for meta lines) uncoloured entirely.
+ *
+ * - a name followed by `(` is a function (`exists`, `abs`, `max`, ...) -> `keyword`
+ * - `global`/`var`/`param`/`local` -> `definitionKeyword`; each `.name` after any path root -> `propertyName`
+ * - other bare paths (`move.axes[0].homed`) -> `propertyName`
+ * - `true`/`false`/`null`/`pi`/`iterations`/... -> `atom`; numbers/strings as themselves
+ * - `[...]` index expressions are tokenised recursively (`global.list[global.i]`)
+ */
+function classifyExpression(raw: string, from: number, to: number, out: Array<HighlightRange>): void {
+	let i = from;
+	while (i < to) {
+		const c = raw[i];
+		if (c === '"') {
+			let j = i + 1;
+			while (j < to) {
+				if (raw[j] === '"') {
+					if (raw[j + 1] === '"') { j += 2; continue; } // RRF's doubled-quote escape
+					j++;
+					break;
+				}
+				j++;
+			}
+			out.push({ from: i, to: j, tag: "string" });
+			i = j;
+		} else if (isDigit(c) || (c === "." && isDigit(raw[i + 1]))) {
+			NUMBER_RE.lastIndex = i;
+			const m = NUMBER_RE.exec(raw);
+			const end = m === null ? i + 1 : Math.min(to, i + m[0].length);
+			out.push({ from: i, to: end, tag: "number" });
+			i = end;
+		} else if (isIdentStart(c)) {
+			i = classifyPath(raw, i, to, out);
+		} else {
+			i++;
+		}
+	}
+}
+
+/** One name plus its `.name` / `[index]` continuation; returns the index just past it. */
+function classifyPath(raw: string, start: number, to: number, out: Array<HighlightRange>): number {
+	let i = start;
+	while (i < to && isIdentPart(raw[i])) i++;
+	const word = raw.slice(start, i);
+
+	let k = i;
+	while (raw[k] === " " || raw[k] === "	") k++;
+	if (raw[k] === "(" && k < to) {
+		out.push({ from: start, to: i, tag: "keyword" });
+		return i;
+	}
+	if (EXPRESSION_LITERALS.has(word)) {
+		out.push({ from: start, to: i, tag: "atom" });
+		return i;
+	}
+	out.push({ from: start, to: i, tag: VARIABLE_NAMESPACES.has(word) ? "definitionKeyword" : "propertyName" });
+
+	for (;;) {
+		if (raw[i] === "[" && i < to) {
+			let depth = 1;
+			let j = i + 1;
+			while (j < to && depth > 0) {
+				if (raw[j] === "[") depth++;
+				else if (raw[j] === "]") depth--;
+				j++;
+			}
+			classifyExpression(raw, i + 1, depth === 0 ? j - 1 : j, out);
+			i = j;
+		} else if (raw[i] === "." && i + 1 < to && isIdentStart(raw[i + 1])) {
+			const nameStart = i + 1;
+			i = nameStart;
+			while (i < to && isIdentPart(raw[i])) i++;
+			out.push({ from: nameStart, to: i, tag: "propertyName" });
+		} else {
+			return i;
+		}
+	}
+}
+
 /** One line's highlight ranges, in ascending `from` order (the order callers need to step through
  *  them left to right) — exported mainly so `test/language.test.ts` can assert on it directly
  *  without going through a full `StreamLanguage`/`EditorView`. */
@@ -39,12 +133,20 @@ export function classifyLineForHighlight(raw: string): ReadonlyArray<HighlightRa
 			: DEFINITION_META_KEYWORDS.has(lexed.meta) ? "definitionKeyword"
 			: "keyword"; // "echo" - a statement, neither control flow nor a declaration
 		ranges.push({ from: lexed.indent, to: lexed.indent + lexed.meta.length, tag });
+		// `lexLine` stops at the keyword; the rest of the line is an expression (or, for `var`/
+		// `global`, a name followed by one) that only this module can colour.
+		const bodyEnd = lexed.comment !== null ? lexed.comment.start : raw.length;
+		classifyExpression(raw, lexed.indent + lexed.meta.length, bodyEnd, ranges);
 	}
 
 	for (const cmd of lexed.commands) {
 		ranges.push({ from: cmd.start, to: cmd.start + cmd.code.length, tag: "keyword" });
 		for (const p of cmd.params) {
 			ranges.push({ from: p.start, to: p.valueStart, tag: "propertyName" });
+			if (p.kind === "expression") {
+				classifyBracedExpression(raw, p.valueStart, p.end, ranges);
+				continue;
+			}
 			const valueTag = paramValueTag(p.kind);
 			if (valueTag !== null && p.end > p.valueStart) ranges.push({ from: p.valueStart, to: p.end, tag: valueTag });
 		}
@@ -58,6 +160,16 @@ export function classifyLineForHighlight(raw: string): ReadonlyArray<HighlightRa
 
 	ranges.sort((a, b) => a.from - b.from);
 	return ranges;
+}
+
+/** A `{...}` parameter value: braces stay `atom` (as the whole span was before), the inside is
+ *  tokenised. Tolerates an unterminated `{` — the user is mid-typing. */
+function classifyBracedExpression(raw: string, from: number, to: number, out: Array<HighlightRange>): void {
+	if (to <= from) return;
+	const closed = raw[to - 1] === "}" && to - 1 > from;
+	out.push({ from, to: from + 1, tag: "atom" });
+	classifyExpression(raw, from + 1, closed ? to - 1 : to, out);
+	if (closed) out.push({ from: to - 1, to, tag: "atom" });
 }
 
 function paramValueTag(kind: ParamKind): string | null {

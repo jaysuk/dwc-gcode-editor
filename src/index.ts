@@ -13,3 +13,5 @@ export * from "./quickSearch.js";
 export * from "./customTheme.js";
 export * from "./colorSchemeStorage.js";
 export * from "./currentLine.js";
+export * from "./tooltipPlacement.js";
+export * from "./viewState.js";

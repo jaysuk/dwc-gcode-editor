@@ -82,6 +82,73 @@ describe("classifyLineForHighlight", () => {
 	});
 });
 
+describe("expression highlighting (exists / global / var)", () => {
+	const slice = (line: string, r: { from: number; to: number }) => line.slice(r.from, r.to);
+	const tagged = (line: string) => classifyLineForHighlight(line).map((r) => [slice(line, r), r.tag]);
+
+	it("colours exists() as a function keyword and global./var. roots as definition keywords on an `if` line", () => {
+		const line = "if exists(global.foo) && var.bar > 1";
+		expect(tagged(line)).toEqual([
+			["if", "controlKeyword"],
+			["exists", "keyword"],
+			["global", "definitionKeyword"],
+			["foo", "propertyName"],
+			["var", "definitionKeyword"],
+			["bar", "propertyName"],
+			["1", "number"],
+		]);
+	});
+
+	it("colours the inside of a {expression} parameter instead of one flat atom span", () => {
+		const line = "G1 X{global.x + 1} Y{exists(var.y) ? 1 : 0}";
+		const t = tagged(line);
+		expect(t).toContainEqual(["global", "definitionKeyword"]);
+		expect(t).toContainEqual(["exists", "keyword"]);
+		expect(t).toContainEqual(["{", "atom"]);
+		expect(t).toContainEqual(["}", "atom"]);
+	});
+
+	it("colours the name and expression on set/var/global declarations", () => {
+		expect(tagged("set global.foo = exists(global.bar)")).toEqual([
+			["set", "definitionKeyword"],
+			["global", "definitionKeyword"],
+			["foo", "propertyName"],
+			["exists", "keyword"],
+			["global", "definitionKeyword"],
+			["bar", "propertyName"],
+		]);
+		expect(tagged("var x = {global.y}").map((x) => x[1])).toContain("definitionKeyword");
+	});
+
+	it("tokenises an index expression recursively and treats object-model paths as properties", () => {
+		const t = tagged("if global.list[global.i] == move.axes[0].homed");
+		expect(t.filter((x) => x[0] === "global")).toHaveLength(2);
+		expect(t).toContainEqual(["move", "propertyName"]);
+		expect(t).toContainEqual(["homed", "propertyName"]);
+		expect(t).toContainEqual(["0", "number"]);
+	});
+
+	it("colours literals, strings (with doubled quotes) and stops before a trailing comment", () => {
+		const line = 'echo "a ""b"" c" ^ true ; global.nope';
+		const t = tagged(line);
+		expect(t).toContainEqual(['"a ""b"" c"', "string"]);
+		expect(t).toContainEqual(["true", "atom"]);
+		expect(t).toContainEqual(["; global.nope", "lineComment"]);
+		expect(t.filter((x) => x[0] === "global")).toHaveLength(0);
+	});
+
+	it("tolerates an unterminated {expression} while typing", () => {
+		expect(() => classifyLineForHighlight("G1 X{exists(global.")).not.toThrow();
+		expect(tagged("G1 X{exists(global.")).toContainEqual(["exists", "keyword"]);
+	});
+
+	it("keeps ranges ascending and non-overlapping", () => {
+		const line = "G1 X{global.list[global.i] + abs(var.y)} Y{1.5e3} ; c";
+		const r = classifyLineForHighlight(line);
+		for (let i = 1; i < r.length; i++) expect(r[i].from).toBeGreaterThanOrEqual(r[i - 1].to);
+	});
+});
+
 describe("gcodeLanguage (real CM6 mount)", () => {
 	function highlightClassesAt(doc: string, pos: number): Array<string> {
 		const state = EditorState.create({

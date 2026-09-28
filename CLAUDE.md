@@ -18,6 +18,39 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-28 (unreleased): `viewState.ts` - per-file cursor + scroll persistence, ported from Fluidd's
+`FileEditor.vue`** (Monaco `saveViewState`/`restoreViewState`, keyed per file, `local`/`session`/`off`
+setting, saved on unmount/file change). Read its real source first. `captureViewState`/`restoreViewState`
+store `{anchor, head, topLine, scrollLeft}` - scroll as the top visible LINE, not pixels (pixels break
+under different font/wrap/width); everything clamped on restore since the file may have changed.
+`gcodeViewStatePersistence({key, store})` restores on creation (one microtask - a plugin can't dispatch
+from its constructor), saves debounced on selection/scroll and always on destroy, and never writes before
+the restore ran (else a fresh view at line 1 overwrites what it was about to restore).
+`createWebStorageViewStateStore` keeps ONE JSON map with LRU eviction (`maxEntries` 200) instead of
+Fluidd's never-expiring per-file keys; all storage access try/catch'd, corrupt data = empty.
+`viewStateStoreForMode("local"|"session"|"off")` is the settings-UI one-liner. **No fold state** - this
+package has no folding (Monaco's blob had it). Not wired into either host (`key` = file path, mode from
+each host's own setting - needs a host settings toggle). Scroll is only spy-tested (`lineBlockAtHeight` /
+`scrollIntoView`) - happy-dom has no layout, so no real browser check yet. 203 tests; 3 teeth checks.
+
+**2026-09-28 (unreleased, on top of v0.8.1): expression highlighting + tooltip placement.** User
+report: `exists`/`global` weren't coloured correctly, and tooltips fell off the top/bottom of the page.
+
+- **`language.ts`**: `lexLine` returns only the bare keyword for a meta line (`if`/`while`/`var`/`set`/
+  `echo`…) and a flat `kind: "expression"` span for `{...}` params - verified by running it - so
+  everything inside was uncoloured or one flat `atom`. New `classifyExpression` scans those bodies:
+  `name(` -> `keyword` (`exists`, `abs`…), `global`/`var`/`param`/`local` -> `definitionKeyword`, `.name`
+  segments and other object-model paths -> `propertyName`, `true`/`null`/`iterations`… -> `atom`,
+  numbers/strings (doubled-quote escape) as themselves, `[...]` indices recursed into, meta-line body
+  stops at `lexed.comment.start`. Reuses only existing tags, so `customTheme.ts`/high-contrast need no
+  new colour keys.
+- **`tooltipPlacement.ts` (new)**, always included by `createEditorInstance`: `tooltips({parent:
+  document.body, position: "fixed"})` so a `transform`ed / `overflow:hidden` host ancestor (Vuetify
+  dialog, Flexible-Layouts tile) can't clip or mis-anchor it, plus a max-height/scroll on the lint
+  tooltip. CM6's own flip/resize logic already measures against the window (read its `writeMeasure`);
+  the defect was the container, not the flip. **Not verified in a real browser** - only that the tooltip
+  DOM lands under `document.body` (happy-dom). 186 tests; both fixes teeth-checked.
+
 **2026-09-22 (v0.8.1): `completion.ts`'s parameter-letter completion now fires automatically right
 after a known command, not just on explicit (Ctrl+Space) invocation.** User report, with a Monaco
 screenshot: typing `M280 ` in DWC's own Monaco editor pops up `P`/`S` unprompted; this package's

@@ -18,6 +18,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { EditorState, Text, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
+import { gcodeTooltipPlacement } from "./tooltipPlacement.js";
 
 /**
  * Undo/redo history plus CM6's standard editing keybindings (word/line navigation, indent,
@@ -84,7 +85,7 @@ export interface EditorInstance {
 export function createEditorInstance(options: EditorInstanceOptions): EditorInstance {
 	const state = EditorState.create({
 		doc: options.doc,
-		extensions: [...BASE_EDITING_EXTENSIONS, ...(options.extensions ?? [])],
+		extensions: [...BASE_EDITING_EXTENSIONS, gcodeTooltipPlacement(), ...(options.extensions ?? [])],
 	});
 	const view = new EditorView({ state, parent: options.parent });
 	let destroyed = false;
