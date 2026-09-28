@@ -18,6 +18,48 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-28 (unreleased): the offline stepper as a macro-testing tool - this package's part is the line as
+evaluated under the current line.** Ask: step through system files and macros (not print files) from a chosen
+starting position, see each computed line as evaluated, see coordinates prominently, and test how code reacts
+to different object-model values. Most of it is NOT here - it spans three repos:
+
+- **`dwc-gcode-core` (unreleased, on top of 1.26.0)**: `stepper/simulation` - `SimulationInputs` (start position
+  for X/Y/Z **and any other axis**, homed, tool, G91/M83; object-model paths and `param.*`; preset `global`s/`var`s;
+  M291 answers), `runSimulation`, `describeStep`, `renderEvaluatedLine`, `axisReadouts`, `findReferencedInputs`,
+  pure edit helpers. `walkExecution({recordEvaluation})` records each step's evaluated `{...}` params, `if`
+  outcome, assignment, `echo`/`M117` text and the variables. **A caller-supplied value now beats the tracked
+  one** (was the reverse) - see its CHANGELOG.
+- **This package**: `currentLine.ts` - `setCurrentLine(view, line, { annotation })` draws a block widget
+  under the highlighted line from `{text, kind: "source"|"value"|"result"}` segments (the shape core's
+  `renderEvaluatedLine` returns; this package does not import core for it). Every call replaces the previous
+  annotation, so a step with nothing to show never inherits the last one. 252 tests (was 245), teeth on
+  widget placement and annotation replacement. **Not verified in a real browser** - happy-dom only.
+- **Both hosts** (`duet-gcode-postprocessor`, `Flexible-Layouts`, byte-identical copies): `GcodeStepperPanel`
+  now composes `StepperReadout` (source line + evaluated line, big per-axis cards with deltas, variable watch)
+  and `StepperScenarioPanel` (start position, and a field per value the file reads). Scenario is saved per
+  file (`...stepperScenario.<path>`), migrating the two old keys; editing the buffer re-runs the walk
+  (debounced). Neither host's `package.json` was bumped - they pin `dwc-gcode-core` ^1.23.0 and this package
+  at `v0.8.1`, so **core must be released, this package tagged, then both hosts bumped** before any of it ships.
+- **Next, in order** (nothing below is done; all four repos' work is UNCOMMITTED in their working trees):
+  1. Review `git diff` in `dwc-gcode-core`, this repo, `duet-gcode-postprocessor`, `Flexible-Layouts`; commit each
+     (co-author line per the session's attribution reminder). Run each repo's gates as separate steps you read.
+  2. Release core: bump `package.json` AND `CORE_VERSION` in `src/version.ts` (a test ties them), move CHANGELOG
+     `## Unreleased` under the new version, tag. Suggest 1.27.0. `npm publish` is manual (see core's CLAUDE.md).
+  3. This repo: bump `dwc-gcode-core` to the new version, bump `package.json` (suggest 0.9.0), tag `v0.9.0`.
+  4. Both hosts: bump `dwc-gcode-core` and `dwc-gcode-editor#v0.9.0` pins, `npm install` (this discards the
+     tarball overlays currently in their `node_modules`), rerun their suites. Postprocessor's `preheatStep` failure is a
+     pre-existing Windows CRLF-fixture issue, not this work. Flexible-Layouts's `GcodeCmEditor.vue`,
+     `GcodeStepperPanel.vue` and `gcodeCmEditor.test.ts` were converted CRLF->LF in the working tree (git sees no diff).
+  5. Real-browser check of the stepper UI (never done): axis-card layout, expansion panel, the evaluated-line block
+     widget in light/dark and a custom theme, `Tab` focus through the scenario fields. Also try `vue-tsc` on the host
+     SFCs - the DWC `dwc-plugin-typecheck` harness can't resolve deps on this machine.
+  6. Deferred features: `startLine` (begin mid-file), evaluate `M291` params in the line view, model `G1 H1` homing
+     moves, named scenarios per file, a "needs a value" auto-expand of the scenario panel when the walk pauses.
+- **Gotcha that cost a repair**: never `npm install --no-save ../dwc-gcode-editor` (or `../dwc-gcode-core`) into a
+  host to test unreleased work. npm symlinks it, then extracts the lockfile's pinned version THROUGH the symlink
+  and overwrites this repo's working tree (it reverted ~20 files to v0.8.1 and lost uncommitted edits). Pack
+  tarballs (`npm pack`) and install those instead - real copies, and they share the host's `@codemirror/state`.
+
 **2026-09-28 (unreleased): `dwc-gcode-core` ^1.26.0, `board.txt` support, Tab and comment-selection.**
 
 - **`boardTxt.ts` (new)**: `board.txt` is the STM32 fork's `key = value` / `key = { a, b }` file, not G-code,

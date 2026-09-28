@@ -73,6 +73,87 @@ describe("gcodeCurrentLine / setCurrentLine", () => {
 		parent.remove();
 	});
 
+	describe("annotation (the line as evaluated)", () => {
+		const annotation = {
+			segments: [
+				{ text: "G1 X", kind: "source" as const },
+				{ text: "105", kind: "value" as const },
+				{ text: " → done", kind: "result" as const },
+			],
+		};
+
+		it("draws the segments in a block beneath the highlighted line, tagged by kind", () => {
+			const { view, parent } = mount("G28\nG1 X{var.a + 5}\nG1 X20\n");
+			setCurrentLine(view, 2, { annotation });
+			const widget = parent.querySelector(".cm-gcodeEvaluatedLine");
+			expect(widget).not.toBeNull();
+			expect(widget!.textContent).toBe("G1 X105 → done");
+			expect(widget!.querySelector(".cm-gcodeEvaluated-value")!.textContent).toBe("105");
+			expect(widget!.querySelector(".cm-gcodeEvaluated-result")!.textContent).toBe(" → done");
+			expect(widget!.querySelector(".cm-gcodeEvaluated-source")!.textContent).toBe("G1 X");
+			view.destroy();
+			parent.remove();
+		});
+
+		it("sits after the highlighted line, not before it or inside another line", () => {
+			const { view, parent } = mount("G28\nG1 X{var.a + 5}\nG1 X20");
+			setCurrentLine(view, 2, { annotation });
+			const rows = [...parent.querySelectorAll(".cm-content > *")].map((el) => el.textContent);
+			expect(rows.indexOf("G1 X105 → done")).toBe(rows.findIndex((t) => t === "G1 X{var.a + 5}") + 1);
+			view.destroy();
+			parent.remove();
+		});
+
+		it("is replaced by the next call rather than accumulating, and gone when that call has none", () => {
+			const { view, parent } = mount("G28\nG1 X10\nG1 X20\n");
+			setCurrentLine(view, 2, { annotation });
+			setCurrentLine(view, 3, { annotation: { segments: [{ text: "second", kind: "result" }] } });
+			expect(parent.querySelectorAll(".cm-gcodeEvaluatedLine")).toHaveLength(1);
+			expect(parent.querySelector(".cm-gcodeEvaluatedLine")!.textContent).toBe("second");
+			setCurrentLine(view, 3); // no annotation given: must not inherit the last step's
+			expect(parent.querySelector(".cm-gcodeEvaluatedLine")).toBeNull();
+			expect(parent.querySelector(".cm-gcodeCurrentLine")).not.toBeNull(); // still highlighted
+			view.destroy();
+			parent.remove();
+		});
+
+		it("is cleared along with the highlight by line: null", () => {
+			const { view, parent } = mount("G28\nG1 X10\n");
+			setCurrentLine(view, 1, { annotation });
+			setCurrentLine(view, null);
+			expect(parent.querySelector(".cm-gcodeEvaluatedLine")).toBeNull();
+			view.destroy();
+			parent.remove();
+		});
+
+		it("draws nothing for an annotation with no segments", () => {
+			const { view, parent } = mount("G28\n");
+			setCurrentLine(view, 1, { annotation: { segments: [] } });
+			expect(parent.querySelector(".cm-gcodeEvaluatedLine")).toBeNull();
+			view.destroy();
+			parent.remove();
+		});
+
+		it("follows its line through an edit elsewhere in the document", () => {
+			const { view, parent } = mount("G28\nG1 X10\nG1 X20");
+			setCurrentLine(view, 3, { annotation });
+			view.dispatch({ changes: { from: 0, insert: "; inserted\n" } });
+			const rows = [...parent.querySelectorAll(".cm-content > *")].map((el) => el.textContent);
+			expect(rows.indexOf("G1 X105 → done")).toBe(rows.indexOf("G1 X20") + 1);
+			view.destroy();
+			parent.remove();
+		});
+
+		it("puts a clamped out-of-range line's annotation under the real last line", () => {
+			const { view, parent } = mount("G28\nG1 X10");
+			expect(() => setCurrentLine(view, 999, { annotation })).not.toThrow();
+			const rows = [...parent.querySelectorAll(".cm-content > *")].map((el) => el.textContent);
+			expect(rows.indexOf("G1 X105 → done")).toBe(rows.indexOf("G1 X10") + 1);
+			view.destroy();
+			parent.remove();
+		});
+	});
+
 	it("does nothing when the extension isn't installed", () => {
 		const parent = document.createElement("div");
 		document.body.appendChild(parent);
