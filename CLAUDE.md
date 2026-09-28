@@ -59,12 +59,34 @@ to different object-model values. Most of it is NOT here - it spans three repos:
   `vue-tsc` clean on both hosts' SFCs; the scenario-panel redesign above committed and pushed to both hosts'
   `main` (not tagged - these two repos don't tag per change, only on their own releases). Postprocessor's
   `preheatStep` failure is a pre-existing Windows CRLF-fixture issue, not this work.
-  **Next, in order:**
-  1. Real-browser check of the stepper UI (never done): axis-card layout, expansion panel, the evaluated-line
-     block widget in light/dark and a custom theme, `Tab` focus through the scenario fields - including the
-     redesigned scenario panel itself (filter box, home toggles, add-value disclosure).
-  2. Deferred features: `startLine` (begin mid-file), evaluate `M291` params in the line view, model `G1 H1` homing
-     moves, named scenarios per file, a "needs a value" auto-expand of the scenario panel when the walk pauses.
+  **Outstanding jobs for the simulator, in order:**
+  1. **Real-browser check (never done at all, on either host)** - happy-dom has verified the DOM shape but
+     nothing about real layout/rendering:
+     - `StepperReadout`: axis-card grid wrapping, the evaluated-line block widget under the current line in
+       light mode, dark mode and a custom color scheme, the "now" highlight.
+     - The scenario panel redesign specifically: axis capsules and their home-icon toggle, the tool/feed/
+       extruder mini stat fields, the G91/M83 toggle buttons, the `(i)` tooltips, the values grid's
+       multi-column wrap AND its internal scroll once entries exceed `max-height` (16rem), the filter box
+       (appears past 5 entries), and the "Add a value manually" one-line disclosure.
+     - `Tab` focus order through the scenario fields (axis inputs → home toggle → remove → next axis →
+       tool/feed/extruder → G91/M83 → filter → values grid → add-value link) - never checked, and the
+       redesign changed the DOM order enough that it's worth re-verifying, not assuming it still reads well.
+     - The expansion panel's own collapse/expand and the "Scenario" / count summary.
+   2. **Release the two hosts as real plugin versions** once the browser check is clean - this session only
+      pushed the work to each host's `main`; neither has been through its own `node scripts/release.mjs
+      <version> --push` (bumps `plugin.json`+`package.json`, tags, triggers the release build). Decide a
+      version number for each first (suggest a minor bump in both, since this is new user-visible
+      functionality, not a fix).
+   3. **Deferred stepper features** (design decisions not yet made, none started):
+      - `startLine` - begin the walk mid-file instead of always from line 1.
+      - Evaluate `M291` message-box parameters in the line-as-evaluated view (currently only `{...}`
+        expressions, assignments and `echo`/`abort`/`M117` are shown evaluated).
+      - Model `G1 H1` homing moves (a move that only completes if it hits an endstop - the simulator has no
+        endstop model at all right now).
+      - Named/saved scenarios per file - currently exactly one scenario per file, no way to keep several
+        (e.g. "cold start" vs "already primed") and switch between them.
+      - A "needs a value" auto-expand of the scenario panel when the walk pauses on an unresolved input,
+        so the user doesn't have to notice the alert and open the accordion by hand.
 - **Gotcha that cost a repair**: never `npm install --no-save ../dwc-gcode-editor` (or `../dwc-gcode-core`) into a
   host to test unreleased work. npm symlinks it, then extracts the lockfile's pinned version THROUGH the symlink
   and overwrites this repo's working tree (it reverted ~20 files to v0.8.1 and lost uncommitted edits). Pack
