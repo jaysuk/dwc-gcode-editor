@@ -38,16 +38,32 @@ to different object-model values. Most of it is NOT here - it spans three repos:
   now composes `StepperReadout` (source line + evaluated line, big per-axis cards with deltas, variable watch)
   and `StepperScenarioPanel` (start position, and a field per value the file reads). Scenario is saved per
   file (`...stepperScenario.<path>`), migrating the two old keys; editing the buffer re-runs the walk
-  (debounced). Committed in both hosts, pins bumped to core ^1.27.0 and this package `v0.9.0`.
-- **Done 2026-09-28**: all four repos committed; core 1.27.0 tagged, pushed and on npm; this package tagged `v0.9.0`
-  and pushed; both hosts bumped and `npm install`ed (real copies, no overlays), suites rerun, `vue-tsc` clean on both
-  hosts' SFCs. **The two hosts' commits are LOCAL, not pushed, and no host is released.** Postprocessor's
+  (debounced). Pins bumped to core ^1.27.0 and this package `v0.9.0`.
+- **Scenario panel redesigned for real screens (2026-09-28, later same session)**: a real-browser look on a
+  1920x1080 laptop found the panel overflowed even a maximised expansion panel - one stacked field+checkbox
+  per axis, two multi-line help paragraphs, one full-width table row per referenced value. Prototyped a
+  compact layout first as an interactive Design artifact, then ported it into `StepperScenarioPanel.vue` /
+  `ScenarioValueField.vue` / `GcodeStepperPanel.vue` in both hosts: axes/tool/feedrate/G91/M83 became one
+  two-row strip (axis capsules with a home icon-toggle instead of checkbox+label; tool/feed/extruder as
+  small stat fields; G91/M83 as toggle buttons), the long help text moved into `v-tooltip`s off an `(i)`
+  icon, and "values this file reads" became a filterable, multi-column, height-capped
+  (`max-height`+`overflow-y:auto`) CSS grid instead of one table row per entry - so however many values a
+  file references, only that list scrolls and nothing below it is ever pushed off screen. "Add a value" is
+  now a one-line disclosure. `ScenarioValueField` gained `variant`/`hideDetails` props (default unchanged)
+  so the compact fields don't each draw their own outlined box. Every `aria-label`/`data-scenario-*` string
+  the tests depend on was kept exactly, so no test changed. `vue-tsc` clean on both hosts' SFCs (see this
+  package's own memory for the scratch-`tsconfig` recipe used, since `dwc-plugin-typecheck` can't resolve a
+  host's own deps).
+- **Done 2026-09-28**: all four repos committed; core 1.27.0 tagged, pushed and on npm; this package tagged
+  `v0.9.0` and pushed; both hosts bumped and `npm install`ed (real copies, no overlays), suites rerun,
+  `vue-tsc` clean on both hosts' SFCs; the scenario-panel redesign above committed and pushed to both hosts'
+  `main` (not tagged - these two repos don't tag per change, only on their own releases). Postprocessor's
   `preheatStep` failure is a pre-existing Windows CRLF-fixture issue, not this work.
   **Next, in order:**
-  1. Real-browser check of the stepper UI (never done): axis-card layout, expansion panel, the evaluated-line block
-     widget in light/dark and a custom theme, `Tab` focus through the scenario fields.
-  2. Push/release the hosts once that looks right.
-  3. Deferred features: `startLine` (begin mid-file), evaluate `M291` params in the line view, model `G1 H1` homing
+  1. Real-browser check of the stepper UI (never done): axis-card layout, expansion panel, the evaluated-line
+     block widget in light/dark and a custom theme, `Tab` focus through the scenario fields - including the
+     redesigned scenario panel itself (filter box, home toggles, add-value disclosure).
+  2. Deferred features: `startLine` (begin mid-file), evaluate `M291` params in the line view, model `G1 H1` homing
      moves, named scenarios per file, a "needs a value" auto-expand of the scenario panel when the walk pauses.
 - **Gotcha that cost a repair**: never `npm install --no-save ../dwc-gcode-editor` (or `../dwc-gcode-core`) into a
   host to test unreleased work. npm symlinks it, then extracts the lockfile's pinned version THROUGH the symlink
