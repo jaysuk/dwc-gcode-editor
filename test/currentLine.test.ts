@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { gcodeCurrentLine, setCurrentLine } from "../src/currentLine";
@@ -149,6 +149,69 @@ describe("gcodeCurrentLine / setCurrentLine", () => {
 			expect(() => setCurrentLine(view, 999, { annotation })).not.toThrow();
 			const rows = [...parent.querySelectorAll(".cm-content > *")].map((el) => el.textContent);
 			expect(rows.indexOf("G1 X105 → done")).toBe(rows.indexOf("G1 X10") + 1);
+			view.destroy();
+			parent.remove();
+		});
+	});
+
+	describe("scrolling", () => {
+		const frame = () => new Promise<void>((resolve) => setTimeout(resolve, 50));
+		/** happy-dom has no layout, so give the editor a 300px-tall scroller and a fixed line block. */
+		function mountWithLayout() {
+			const m = mount("G28\nG1 X10\nG1 X20\n");
+			Object.defineProperty(m.view.scrollDOM, "clientHeight", { configurable: true, value: 300 });
+			m.view.lineBlockAt = () => ({ top: 1000, height: 20 }) as ReturnType<EditorView["lineBlockAt"]>;
+			return m;
+		}
+
+		it("centres the line by moving the editor's own scroller", async () => {
+			const { view, parent } = mountWithLayout();
+			setCurrentLine(view, 2);
+			await frame();
+			expect(view.scrollDOM.scrollTop).toBe(view.documentPadding.top + 1000 - (300 - 20) / 2);
+			view.destroy();
+			parent.remove();
+		});
+
+		it("never scrolls the page: CM6's own scroll-into-view request climbs every ancestor and does", async () => {
+			// scrollRectIntoView hands whatever centring the editor's scroller could not do (a line near the
+			// top or bottom of a file) on to window.scrollBy - the page jumped down when stepping to the end.
+			const { view, parent } = mountWithLayout();
+			const scrollBy = vi.spyOn(window, "scrollBy");
+			const scrolled: unknown[] = [];
+			const seen = view.dispatch.bind(view);
+			view.dispatch = ((...specs: Parameters<EditorView["dispatch"]>) => {
+				for (const spec of specs) {
+					const effects = (spec as { effects?: unknown }).effects;
+					scrolled.push(...(Array.isArray(effects) ? effects : effects === undefined ? [] : [effects]));
+				}
+				return seen(...specs);
+			}) as EditorView["dispatch"];
+			setCurrentLine(view, 3);
+			await frame();
+			expect(scrollBy).not.toHaveBeenCalled();
+			// the only effect dispatched is the highlight itself, not a scrollIntoView
+			expect(scrolled).toHaveLength(1);
+			scrollBy.mockRestore();
+			view.destroy();
+			parent.remove();
+		});
+
+		it("never scrolls above the top of the document", async () => {
+			const { view, parent } = mountWithLayout();
+			view.lineBlockAt = () => ({ top: 0, height: 20 }) as ReturnType<EditorView["lineBlockAt"]>;
+			setCurrentLine(view, 1);
+			await frame();
+			expect(view.scrollDOM.scrollTop).toBe(0);
+			view.destroy();
+			parent.remove();
+		});
+
+		it("leaves the scroll position alone with scroll: false", async () => {
+			const { view, parent } = mountWithLayout();
+			setCurrentLine(view, 2, { scroll: false });
+			await frame();
+			expect(view.scrollDOM.scrollTop).toBe(0);
 			view.destroy();
 			parent.remove();
 		});

@@ -18,6 +18,16 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-29 (v0.13.1, RELEASED: tagged and pushed; `npm publish` NOT done - the hosts pin the git tag): stepping no longer scrolls the page.**
+User report: in Flexible-Layouts, clicking Step through file made the full-height page jump down. `setCurrentLine` used
+`EditorView.scrollIntoView(pos, {y: "center"})`, and CM6's `scrollRectIntoView` climbs EVERY ancestor: whatever centring the editor's own
+scroller cannot do (a line near the top/bottom of the file can never be centred) it passes on as a centre request to `window.scrollBy`.
+Reproduced in real Chrome (tall page, editor in an `overflow: hidden` flex tile): old code moved `scrollY` 218/237 px on the last two
+lines, new code 0. `currentLine.ts` now sets `scrollDOM.scrollTop` itself from `lineBlockAt` in a `requestMeasure` (so the
+annotation widget's height counts). 4 new tests (2 fail against the old code), 362 total. Hosts pinned to `#v0.13.1`.
+**Not verified in the real FL page** - only the mechanism, in a static page. If another feature needs "scroll into view" inside a
+host, do not use `EditorView.scrollIntoView` with `y: "center"`/`"start"` - it will move the page.
+
 **2026-09-29 (v0.13.0, RELEASED: tagged, pushed, on npm): two files side by side, and the review of Duet3D/DuetWebControl#517 applied to our own code.**
 The maintainer (chrishamm) sent #517 back: every pane transition moved a `v-window-item` between two `v-window` parents, Vue cannot
 re-parent a component, so the editor unmounted and remounted (model disposed, file re-downloaded, unsaved edits gone; none of it checked

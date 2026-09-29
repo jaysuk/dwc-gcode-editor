@@ -123,11 +123,27 @@ export interface SetCurrentLineOptions {
  * view's extensions.
  */
 export function setCurrentLine(view: EditorView, line: number | null, options: SetCurrentLineOptions = {}): void {
-	const effects: Array<StateEffect<unknown>> = [setCurrentLineEffect.of({ line, annotation: options.annotation ?? null })];
+	view.dispatch({ effects: setCurrentLineEffect.of({ line, annotation: options.annotation ?? null }) });
 	if (line !== null && options.scroll !== false) {
 		const clamped = Math.min(Math.max(1, line), view.state.doc.lines);
-		const pos = view.state.doc.line(clamped).from;
-		effects.push(EditorView.scrollIntoView(pos, { y: "center" }));
+		centreLineInEditor(view, view.state.doc.line(clamped).from);
 	}
-	view.dispatch({ effects });
+}
+
+/** Centres the line at `pos` by moving the editor's OWN scroller and nothing else. Not
+ *  `EditorView.scrollIntoView(pos, {y: "center"})`: CM6's `scrollRectIntoView` walks every ancestor
+ *  after the editor's scroller, and whatever centring the editor could not do itself (a line near the
+ *  top or bottom of the file can never be centred) it hands on as a centre request to the page - so
+ *  stepping through the first or last few lines scrolled the whole page. Read in a measure pass so the
+ *  height of the annotation widget just added is already counted. */
+function centreLineInEditor(view: EditorView, pos: number): void {
+	view.requestMeasure({
+		read: (v) => {
+			const block = v.lineBlockAt(pos);
+			return v.documentPadding.top + block.top - (v.scrollDOM.clientHeight - block.height) / 2;
+		},
+		write: (top, v) => {
+			v.scrollDOM.scrollTop = Math.max(0, top);
+		},
+	});
 }
