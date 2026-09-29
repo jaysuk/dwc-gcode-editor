@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CompletionContext, type CompletionResult, type CompletionSource } from "@codemirror/autocomplete";
+import { CompletionContext, type Completion, type CompletionResult, type CompletionSource } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
 import { createGcodeCompletionSource } from "../src/completion";
 
@@ -99,6 +99,32 @@ describe("createGcodeCompletionSource", () => {
 	it("returns null outside of any command (e.g. inside a trailing comment)", () => {
 		const result = source(contextFor("G28 ; home all axes", 10));
 		expect(result).toBeNull();
+	});
+
+	it("attaches a hoverbox `info` to each parameter completion, listing every parameter of the command on its own row", () => {
+		// "G1 " offers F and H (see the earlier "remaining parameters automatically" test) - the info
+		// box attached to EITHER option must list every one of them, not just the one it's attached to,
+		// since it's a reference view of the whole command, not a per-item tooltip.
+		const result = source(contextFor("G1 ", 3));
+		const f = result!.options.find((o) => o.label === "F");
+		expect(f).toBeDefined();
+		expect(typeof f!.info).toBe("function");
+		const infoFn = f!.info as (completion: Completion) => Node;
+		const box = infoFn(f!) as HTMLElement;
+		expect(box.className).toBe("cm-gcodeParamInfo");
+		const rows = Array.from(box.querySelectorAll(".cm-gcodeParamInfoRow"));
+		const rowLetters = rows.map((row) => row.querySelector(".cm-gcodeParamInfoLetter")!.textContent);
+		expect(rowLetters).toContain("F");
+		expect(rowLetters).toContain("H");
+	});
+
+	it("bolds only the row matching the completion the hoverbox is attached to", () => {
+		const result = source(contextFor("G1 ", 3));
+		const f = result!.options.find((o) => o.label === "F")!;
+		const box = (f.info as (completion: Completion) => HTMLElement)(f);
+		const active = Array.from(box.querySelectorAll(".cm-gcodeParamInfoRow-active"));
+		expect(active).toHaveLength(1);
+		expect(active[0].querySelector(".cm-gcodeParamInfoLetter")!.textContent).toBe("F");
 	});
 
 	it("machineMode option does not exclude a mode-agnostic command", () => {

@@ -16,9 +16,10 @@ package's own RepRapFirmware-source citations.
 See `duet-gcode-postprocessor/docs/gcode-editor-plan.md` for the design this package implements,
 including the real, measured reasoning behind replacing Monaco and the CodeMirror 6 choice.
 
-**Status:** core package built (workspace/diagnostics/language/docBuilder/editorCore), with a
-working interactive demo — clone this repo, `npm install`, `npm run dev`. Not yet published to npm,
-and not yet wired into either consuming plugin.
+**Status:** published to npm as [`dwc-gcode-editor`](https://www.npmjs.com/package/dwc-gcode-editor)
+(`npm install dwc-gcode-editor`). See `CLAUDE.md`'s own `## Status` section for the detailed,
+dated history of what's shipped, what's wired into which host, and what's still outstanding — this
+file is a stub, not the source of truth.
 
 ## License
 

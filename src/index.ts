@@ -17,3 +17,4 @@ export * from "./tooltipPlacement.js";
 export * from "./viewState.js";
 export * from "./boardTxt.js";
 export * from "./fileLanguage.js";
+export * from "./asciiArt.js";

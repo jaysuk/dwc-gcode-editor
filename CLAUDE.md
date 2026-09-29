@@ -18,6 +18,59 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-29 (v0.10.0): ASCII-art banners + a real per-command parameter hoverbox for completions,
+released.** Two independent user asks, built the previous session and released this one.
+
+- **`asciiArt.ts` (new): `renderAsciiArt`/`insertAsciiArt`.** The user's linked reference
+  (`budavariam/asciiart-text`) turned out on inspection to be a small showcase app, not a reusable
+  library — its real `package.json` lists `figlet` as a `devDependency`. Took that as the actual
+  ask (a FIGlet-style ASCII-art-to-comment feature) and added `figlet` (patorjk/figlet.js) as a real
+  dependency instead: verified first, not assumed, that its one `dependencies` entry (`commander`) is
+  CLI-only and never reaches the library import, and that its browser build + bundled `"Standard"`
+  font together are ~70KB raw (`figlet-*.js` ~39KB + `importable-fonts/Standard.js` ~31KB) — a real
+  number checked against the actual installed files, not a guess, and small next to the 94 KB gzipped
+  figure `gcode-editor-plan.md` already established as this package's own budget. Only `"Standard"` is
+  bundled (parsed once at module load via `figlet.parseFont`, following figlet's own README browser
+  recipe exactly); `listAsciiArtFonts`/`parseAsciiArtFont`/`preloadAsciiArtFonts` are thin wrappers so
+  a host can add more fonts itself without this module ever fetching one over the network on its own.
+  `renderAsciiArt(text, options)` wraps every rendered row as its own full-line `;` comment (RRF's
+  real line-comment token, confirmed against `language.ts`'s `commentTokens`, not assumed) and trims
+  FIGlet's own trailing-space padding first (a wholly-blank row becomes a bare `;`, not `; ` with a
+  dangling space). `insertAsciiArt(view, text, options)` is multi-cursor safe (built on
+  `EditorState.changeByRange`, not hand-rolled offset math) and keeps the banner on clean lines of its
+  own — a newline is added before/after only when the cursor isn't already at that line's start/end,
+  so inserting mid-line splits the line around the block instead of fusing text onto its first/last
+  row. 12 new tests, real teeth on the read-only guard and the before/after newline logic specifically
+  (both confirmed to fail when stubbed to always-empty). **Not wired into either host** — needs a
+  toolbar button + a text-input prompt in `duet-gcode-postprocessor`'s `GcodeEditor.vue` and
+  `Flexible-Layouts`' `GcodeCmEditor.vue`, same as every other package-level action this package has
+  shipped ahead of host wiring (`editorActions.ts`'s `alignLineComments`, `quickSearch.ts`, etc.).
+- **`completion.ts`: parameter completions now carry a real hoverbox `info` panel.** User report: the
+  parameter suggestions after a command (`G1 `'s `F`/`H`/etc.) were single, non-wrapping list rows —
+  fine for a short description, but `@codemirror/autocomplete`'s own base theme ellipsis-clips a long
+  one (`overflowX: hidden; textOverflow: ellipsis` on every `<li>`, verified against its real compiled
+  source, not assumed), and a command with several parameters at once needed scrolling a cramped
+  10em-tall list to see them all. Fix: each parameter completion's `info` now builds a real
+  `.cm-completionInfo` panel (CM6's own documented "info" mechanism, a genuine `.cm-tooltip`, not a
+  hand-rolled overlay — the same "boxed, positioned, escapes ancestor clipping" primitive
+  `tooltipPlacement.ts` already mounts at `document.body`) listing **every** parameter the current
+  command accepts, one per row, full text, never truncated — the square, Monaco-suggest-widget-style
+  hoverbox asked for. The row matching the completion the box is attached to is bolded, mirroring how
+  Monaco's own parameter-hint widget highlights the active parameter. New export
+  `gcodeParamInfoTheme` styles it and widens `.cm-completionInfo`'s own fixed 400px default; bundled
+  into `gcodeCompletion()` automatically, and documented as something a host composing
+  `createGcodeCompletionSource()` into its own `autocompletion()` call needs to add itself. 2 new
+  tests, teeth-checked (stubbing the `info` field away fails both new tests, restored).
+- Both changes: full suite green (266 tests, was 252), `npm run typecheck` clean, `npm run build`
+  clean. **Released as v0.10.0** (minor bump — a new dependency, a new module, and a real
+  completion-UI change, not a fix): `package.json`/`package-lock.json` bumped, committed, tagged
+  `v0.10.0`, pushed, and published to npm (`npm publish`, manual per this file's own Releasing
+  section — the GitHub Actions release workflow only cuts the GitHub Release from the tag, it does
+  not touch npm). **Not done**: wiring either feature into a host — `duet-gcode-postprocessor` and
+  `Flexible-Layouts` are still pinned to `dwc-gcode-editor` v0.9.0 and need their own bump plus real
+  toolbar work (an ASCII-art button + text prompt; the parameter hoverbox needs no host change at all,
+  it's automatic wherever `gcodeCompletion()` is already wired in).
+
 **2026-09-28 (later same session): first real-browser feedback on the stepper UI - toolbar decluttered,
 `StepperReadout` compacted, in both hosts.** User sent a real-browser screenshot of `GcodeCmEditor`/
 `GcodeStepperPanel` open on `homex.g` in Flexible-Layouts (the toolbar's icon order pinned it to that

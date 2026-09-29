@@ -39,11 +39,21 @@
  * modes.** A command with no `machineModes` field is valid in every mode (`CommandSpec`'s own doc
  * comment) and is never excluded. Omitting `machineMode` entirely (the default) offers every command
  * in the dictionary — an honest "I don't know the current mode" default, not a guess.
+ *
+ * **Parameter completions carry a `paramInfoBox` hoverbox** (see that function) — a real
+ * `.cm-completionInfo` panel, boxed and scrollable, listing every parameter the current command
+ * accepts, one per row, in full. Without it, a parameter's own `detail` text is the only place its
+ * description appears, and that's a single non-wrapping list row (`@codemirror/autocomplete`'s own
+ * base theme ellipsis-clips it) — fine for one short param, not for a command with several or a
+ * description too long to fit. `gcodeCompletion()` bundles the styling (`gcodeParamInfoTheme`)
+ * automatically; a host composing `createGcodeCompletionSource()` into its own `autocompletion()`
+ * call needs to add that extension itself.
  */
 
 import type { Completion, CompletionContext, CompletionResult, CompletionSource } from "@codemirror/autocomplete";
 import { autocompletion } from "@codemirror/autocomplete";
 import type { Extension } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import { lexLine, type LexedCommand, type MachineMode } from "dwc-gcode-core";
 import { COMMANDS, commandSpec } from "dwc-gcode-core/dictionary/commands";
 import type { CommandSpec, ParamSpec } from "dwc-gcode-core/dictionary/schema";
@@ -79,9 +89,85 @@ function describeParam(p: ParamSpec): string {
 	return `${p.description}${range}`;
 }
 
-function paramCompletion(p: ParamSpec): Completion {
-	return { label: p.letter, type: "property", detail: describeParam(p) };
+/**
+ * The parameter completion list's `detail` (one command's full description, inline, after the
+ * letter) is a single non-wrapping row (`@codemirror/autocomplete`'s own base theme sets
+ * `overflowX: hidden; textOverflow: ellipsis` on every `<li>`) - fine for a short description, but a
+ * long one (or a command with many parameters at once, e.g. `G1`'s `X`/`Y`/`Z`/`E`/`F`/`H`) either
+ * gets clipped mid-sentence or needs scrolling through a cramped 10em-tall list to see them all. This
+ * builds the same "hoverbox" Monaco's own suggest widget shows beside the highlighted item
+ * (`@codemirror/autocomplete`'s `info` panel - a real `.cm-tooltip`, not a re-implementation) but
+ * filled with EVERY parameter the command accepts, one per row, full text, never truncated - the
+ * boxed, one-parameter-per-line reference view asked for, rather than the single clipped inline row.
+ * The row matching `activeLetter` (the completion this info box is attached to) is bolded, the same
+ * way Monaco's own parameter-hint widget highlights the active parameter.
+ */
+function paramInfoBox(spec: CommandSpec, activeLetter: string): () => Node {
+	return (): Node => {
+		const box = document.createElement("div");
+		box.className = "cm-gcodeParamInfo";
+		for (const param of spec.parameters) {
+			const row = document.createElement("div");
+			row.className = "cm-gcodeParamInfoRow";
+			if (param.letter.toUpperCase() === activeLetter.toUpperCase()) {
+				row.classList.add("cm-gcodeParamInfoRow-active");
+			}
+			const letter = document.createElement("span");
+			letter.className = "cm-gcodeParamInfoLetter";
+			letter.textContent = param.letter;
+			const desc = document.createElement("span");
+			desc.className = "cm-gcodeParamInfoDesc";
+			desc.textContent = describeParam(param);
+			row.append(letter, desc);
+			box.appendChild(row);
+		}
+		return box;
+	};
 }
+
+function paramCompletion(p: ParamSpec, spec: CommandSpec): Completion {
+	return { label: p.letter, type: "property", detail: describeParam(p), info: paramInfoBox(spec, p.letter) };
+}
+
+/**
+ * Styling for `paramInfoBox`'s DOM, and a little extra room for the `.cm-completionInfo` panel
+ * itself (CM6's own default is a fixed `max-width: 400px`, sized for a short prose blurb, not a
+ * multi-row parameter table). Bundled into `gcodeCompletion()` automatically; a host that instead
+ * composes `createGcodeCompletionSource()` into its own `autocompletion({override: [...]})` call
+ * (the module doc comment's documented alternative) needs to add this extension itself for the
+ * hoverbox to be styled - it has no effect on anything but the classes `paramInfoBox` creates, so
+ * it's harmless to include even when nothing uses it.
+ */
+export const gcodeParamInfoTheme: Extension = EditorView.baseTheme({
+	".cm-tooltip.cm-completionInfo": {
+		maxWidth: "min(90vw, 26em)",
+	},
+	".cm-gcodeParamInfo": {
+		display: "flex",
+		flexDirection: "column",
+		maxHeight: "16em",
+		overflowY: "auto",
+		fontFamily: "monospace",
+	},
+	".cm-gcodeParamInfoRow": {
+		display: "flex",
+		gap: "0.6em",
+		alignItems: "baseline",
+		whiteSpace: "normal",
+		padding: "1px 0",
+	},
+	".cm-gcodeParamInfoRow-active": {
+		fontWeight: "bold",
+	},
+	".cm-gcodeParamInfoLetter": {
+		flex: "0 0 auto",
+		minWidth: "1.4em",
+		opacity: "0.75",
+	},
+	".cm-gcodeParamInfoDesc": {
+		flex: "1 1 auto",
+	},
+});
 
 /** The command whose code span or trailing param region contains `posInLine`, if any. */
 function commandAt(commands: ReadonlyArray<LexedCommand>, posInLine: number): LexedCommand | null {
@@ -126,7 +212,7 @@ function paramLetterCompletions(
 
 	const options = spec.parameters
 		.filter((p) => !usedLetters.has(p.letter.toUpperCase()))
-		.map(paramCompletion);
+		.map((p) => paramCompletion(p, spec));
 	if (options.length === 0) return null;
 	return { from, options, validFor: /^[A-Za-z]?$/ };
 }
@@ -154,5 +240,5 @@ export function createGcodeCompletionSource(options: GcodeCompletionOptions = {}
 /** Ready-to-use extension: `@codemirror/autocomplete`'s own `autocompletion()` UI, wired to
  *  `createGcodeCompletionSource`'s source as its sole override. */
 export function gcodeCompletion(options: GcodeCompletionOptions = {}): Extension {
-	return autocompletion({ override: [createGcodeCompletionSource(options)] });
+	return [autocompletion({ override: [createGcodeCompletionSource(options)] }), gcodeParamInfoTheme];
 }
