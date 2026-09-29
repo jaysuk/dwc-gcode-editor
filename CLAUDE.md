@@ -18,7 +18,7 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
-**2026-09-29 (v0.11.0, committed locally, NOT tagged/pushed/published): `menuFile.ts` - 12864 menu files get real highlighting and diagnostics.**
+**2026-09-29 (v0.11.0, RELEASED: tagged, pushed, on npm): `menuFile.ts` - 12864 menu files get real highlighting and diagnostics.**
 Why: Flexible-Layouts previews a menu file on its 12864 emulator, but DWC's Monaco exposes only `save()`/`focus()`, so the
 preview could only show the file as saved. Opening menu files in this editor lets the host read the live buffer.
 
@@ -37,9 +37,10 @@ preview could only show the file as saved. Opening menu files in this editor let
   Core's offsets count one character per line break, so pass `
 ` text (a CM6 document always is).
 - Bumped `dwc-gcode-core` to `^1.29.0` (published; was installed at 1.27.0). 294 tests (was 266), typecheck/build clean.
-- **Host work**: Flexible-Layouts wires it (see its own CLAUDE.md). The Flexible-Layouts commit needs THIS tag: to release,
-  `git tag v0.11.0 && git push origin main v0.11.0` (+ `npm publish`, manual), then in Flexible-Layouts change the
-  `dwc-gcode-editor` pin to `#v0.11.0` and `npm install` so the lock picks up the new sha.
+- **Host work**: Flexible-Layouts wires it (see its own CLAUDE.md) and is pinned to `#v0.11.0`, pushed, CI green.
+  `duet-gcode-postprocessor` has no menu files to edit and is still pinned to `#v0.10.0` (nothing to gain from 0.11.0).
+  Released the usual way: `git tag v0.11.0 && git push origin main v0.11.0`, then `npm publish` (manual).
+  Current published pair: core 1.30.0 (M291 boxes) and this package 0.11.0.
 
 **2026-09-29 (later, same day): all five deferred stepper features built - core 1.29.0 and both hosts, committed
 locally, NOT pushed, core NOT tagged/published.** User skipped the real-browser check and the host releases and asked
@@ -82,7 +83,8 @@ for every deferred feature ("all of the above" + G1 H1). Nothing in THIS package
   both **and it found a real error of mine** (a union event name passed to `emit`) - the scratch-tsconfig recipe in
   memory needs one fix: do NOT put `baseUrl` in it (TS 6 rejects it with TS5101 and vue-tsc then reports nothing,
   which looks like a pass; the teeth check caught this).
-- **Blocked on the user, deliberately**: core is not tagged, pushed or `npm publish`ed, so both hosts still pin
+- **(Superseded 2026-09-29, later: core 1.29.0 and 1.30.0 are tagged, pushed and on npm; Flexible-Layouts is bumped and pushed;
+  the postprocessor pins core ^1.29.0. The text below is the state at the time.)** **Blocked on the user, deliberately**: core is not tagged, pushed or `npm publish`ed, so both hosts still pin
   `dwc-gcode-core` ^1.27.0/^1.28.0 and their lockfiles are untouched; they were tested against a real `npm pack`
   tarball installed with `--no-save`. Order when authorised: push core + tag `v1.29.0` + `npm publish` (poll `npm view`),
   then in each host bump the pin to ^1.29.0 and `npm install`, rerun gates, push, and check CI. The hosts still have not been
