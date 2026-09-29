@@ -18,6 +18,29 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-29 (v0.11.0, committed locally, NOT tagged/pushed/published): `menuFile.ts` - 12864 menu files get real highlighting and diagnostics.**
+Why: Flexible-Layouts previews a menu file on its 12864 emulator, but DWC's Monaco exposes only `save()`/`focus()`, so the
+preview could only show the file as saved. Opening menu files in this editor lets the host read the live buffer.
+
+- **`menuLanguage`** (`classifyMenuLine`): built on core's `parseMenu` (per-parameter spans), no grammar of its own. The six
+  commands RRF dispatches on are `keyword` (case-insensitive), an unrecognised word is deliberately uncoloured (it is what RRF
+  refuses), parameter letters `propertyName`, values `number`/`string`, `{...}` expressions go through `language.ts`'s
+  `classifyExpression` (now exported, with `HighlightRange`), `;` is `lineComment` - but only when every argument before it
+  parsed, because RRF stops the line at the first bad argument. Existing tags only, so custom/high-contrast themes need nothing.
+  `languageForPath` returns it for `FileKind: "menu"`.
+- **`menuDiagnostics(text, {siblings, path, ...})` / `menuLiveLinter(getOptions)`**: core's `menu/*` rules are only reachable
+  through `diagnoseProject` (`checkMenuDocument` is not exported), so this loads the text as a one-file project plus an empty
+  stub per sibling name and keeps the findings for the edited file. **`menu/target-missing` and `menu/image-missing` are switched
+  OFF unless `siblings` is given** - "not in the folder" cannot be told from "folder not listed". A sibling stub with the
+  file's own name would overwrite its text (`loadProject` keys by canonical path), so it is skipped (the test that caught the
+  guard being removable was first written vacuously - it passed with the guard deleted; mutation-checked and rewritten).
+  Core's offsets count one character per line break, so pass `
+` text (a CM6 document always is).
+- Bumped `dwc-gcode-core` to `^1.29.0` (published; was installed at 1.27.0). 294 tests (was 266), typecheck/build clean.
+- **Host work**: Flexible-Layouts wires it (see its own CLAUDE.md). The Flexible-Layouts commit needs THIS tag: to release,
+  `git tag v0.11.0 && git push origin main v0.11.0` (+ `npm publish`, manual), then in Flexible-Layouts change the
+  `dwc-gcode-editor` pin to `#v0.11.0` and `npm install` so the lock picks up the new sha.
+
 **2026-09-29 (later, same day): all five deferred stepper features built - core 1.29.0 and both hosts, committed
 locally, NOT pushed, core NOT tagged/published.** User skipped the real-browser check and the host releases and asked
 for every deferred feature ("all of the above" + G1 H1). Nothing in THIS package changed - all five are core + host.

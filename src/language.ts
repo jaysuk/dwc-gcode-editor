@@ -18,7 +18,7 @@
 import { StreamLanguage, type StreamParser } from "@codemirror/language";
 import { lexLine, type LexedLine, type ParamKind } from "dwc-gcode-core";
 
-interface HighlightRange {
+export interface HighlightRange {
 	from: number;
 	to: number;
 	tag: string;
@@ -51,7 +51,7 @@ const isIdentPart = (c: string | undefined): boolean => c !== undefined && /\w/.
  * - `true`/`false`/`null`/`pi`/`iterations`/... -> `atom`; numbers/strings as themselves
  * - `[...]` index expressions are tokenised recursively (`global.list[global.i]`)
  */
-function classifyExpression(raw: string, from: number, to: number, out: Array<HighlightRange>): void {
+export function classifyExpression(raw: string, from: number, to: number, out: Array<HighlightRange>): void {
 	let i = from;
 	while (i < to) {
 		const c = raw[i];
