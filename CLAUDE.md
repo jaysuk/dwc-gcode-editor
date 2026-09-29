@@ -18,6 +18,55 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-29 (later, same day): all five deferred stepper features built - core 1.29.0 and both hosts, committed
+locally, NOT pushed, core NOT tagged/published.** User skipped the real-browser check and the host releases and asked
+for every deferred feature ("all of the above" + G1 H1). Nothing in THIS package changed - all five are core + host.
+
+- **`dwc-gcode-core` 1.29.0** (commit `b3e6263`, local; `CHANGELOG.md` has the full entry):
+  - `startLine` (`SimulationInputs.startLine`, 1-based; `WalkOptions.startLine`, 0-based). The option already existed
+    but was only right for a flat file - a block above the start line was still evaluated and run. Now skipped without
+    evaluating; a start inside an `if`/`elif`/`else` arm or `while` body resumes that body ("taken" without evaluating the
+    header), then carries on; on an `elif`/`else` line it starts the chain there. `findReferencedInputs(text,
+    {startLine})` ignores lines above it and stops counting declarations above it (the walk never runs them, so the
+    scenario must supply the value). `execPlainLines` lifts the clamp as soon as it runs a line at/after the start;
+    the two post-resume `this.startLine = 0` are what stop a loop's second pass skipping lines when the resumed pass
+    ran nothing (teeth-checked with a false `if` as the last body line - stubbing only one of the two clears passes,
+    stubbing both fails).
+  - `M291` with `{...}` parameters: read from RRF source first (`StringParser::GetQuotedString`'s `{` branch ->
+    `AppendAsString`, `GCodes::DoMessageBox`). `parseBlockingMessageBox(cmd, evaluated?)`; the walker evaluates an
+    M291 line's params first (per command, so `G1 F{..} M291 F{..}` can't cross), under `evaluateParams` only (without
+    it an expression `P` is still "not a box", unchanged). Records the evaluation on the step, so the line view shows
+    `M291 P"Layer 7" S2`.
+  - `G1 H1`: `EndstopModel` (`end` low/high/none, `min`, `max`, `triggers`) in `InitialMachineState.endstops`. From RRF
+    3.7.0-rc.1 `GCodes4.cpp` `waitingForSpecialMoveToComplete`: only `axesToHome & endstopsTriggered` axes get
+    `AxisMinimum`/`AxisMaximum` (defaults 0/200 - `Configuration.h`) and `SetAxisIsHomed`; a non-triggering axis ends at
+    the move target, unhomed. H2/H3/H4 stay plain moves. **`G28` failing to home is a different code path
+    (`homing2` "Failed to home axes") and is NOT modelled.**
+  - `stepper/scenarioSet`: `ScenarioSet` of named `SimulationInputs`, add/duplicate/rename/delete/select, JSON that
+    reads a file's old bare scenario back as a set of one "Default".
+  - 2126 tests (was 2062), typecheck/build/`docs:api` clean. Teeth-checked; the check caught two of my own
+    vacuous tests (one asserted `iterations` in a `while` header, which RRF rejects outside a loop; one used a body
+    whose last line always cleared the clamp anyway).
+- **Both hosts** (commits `86b85e6` duet-gcode-postprocessor, `b458c59` Flexible-Layouts, local, the four stepper SFCs still
+  byte-identical): scenario selector with new/duplicate/rename/delete (delete asks first unless the scenario is empty),
+  the active name in the accordion title, a "Start line" field plus "start at the cursor line" button, a collapsible
+  "Endstops for G1 H1 homing moves" section (per-axis end/min/max/never-triggers), and the accordion opens itself when
+  the walk pauses on a value it has a field for (only on a NEW pause; a collapsed panel stays collapsed for the same
+  path; a computed-index path with no field is left to the alert). `simulationScenario.ts` is now `loadScenarioSet`/
+  `saveScenarioSet` (same localStorage key - the value is self-tagged, so old and new shapes read apart). Host tests:
+  postprocessor 1214 pass (the old `preheatStep` CRLF failure did not show this run), Flexible-Layouts 1446 pass/1
+  skip (one unrelated `fullPage.test.ts` timing flake once under full-suite load, passes alone). `vue-tsc` clean on
+  both **and it found a real error of mine** (a union event name passed to `emit`) - the scratch-tsconfig recipe in
+  memory needs one fix: do NOT put `baseUrl` in it (TS 6 rejects it with TS5101 and vue-tsc then reports nothing,
+  which looks like a pass; the teeth check caught this).
+- **Blocked on the user, deliberately**: core is not tagged, pushed or `npm publish`ed, so both hosts still pin
+  `dwc-gcode-core` ^1.27.0/^1.28.0 and their lockfiles are untouched; they were tested against a real `npm pack`
+  tarball installed with `--no-save`. Order when authorised: push core + tag `v1.29.0` + `npm publish` (poll `npm view`),
+  then in each host bump the pin to ^1.29.0 and `npm install`, rerun gates, push, and check CI. The hosts still have not been
+  through their own release (`node scripts/release.mjs`) and the real-browser check is still not done.
+- Still unbuilt: `G28` modelled as running the homing macros; `move.axes[n].min/max` and `sensors.endstops[]`
+  answered from the endstop model (they fall through to "ask" today).
+
 **2026-09-29 (v0.10.0): ASCII-art banners + a real per-command parameter hoverbox for completions,
 released.** Two independent user asks, built the previous session and released this one.
 
