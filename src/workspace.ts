@@ -10,6 +10,14 @@
  * holds a file path, a directory listing, or anything else. A host renders `WorkspaceState` with
  * its own tab strip / split-pane chrome; this module only owns the state transitions.
  *
+ * **Rendering rule for hosts: draw the tabs as ONE flat list keyed by `tab.id`, and place each in its pane
+ * with CSS (a grid column) — never as children of a per-pane container.** Vue cannot move a component
+ * between two parents: a tab that changes pane under a per-pane `v-for` (or a per-pane `v-window`) is
+ * unmounted and mounted again, which throws away the editor and, with it, unsaved edits, undo history,
+ * cursor and scroll. That is the defect Duet3D/DuetWebControl#517 was sent back for. Every function here
+ * changes only a tab's `groupId` and never its `id`, and there is no group renumbering, so a flat list
+ * keeps every editor mounted through split, move and collapse.
+ *
  * Pure and immutable: every function returns a new `WorkspaceState`, never mutates its argument —
  * the natural shape for a Vue host to hold in a `ref` and replace on each change, and the easiest
  * to give real test coverage to.
@@ -199,6 +207,27 @@ export function closeSplit<T>(state: WorkspaceState<T>): WorkspaceState<T> {
 		...state,
 		tabs,
 		groups: [{ id: PRIMARY_GROUP, activeTabId: secondaryActive?.id ?? group(state, PRIMARY_GROUP).activeTabId }],
+		focusedGroupId: PRIMARY_GROUP,
+	};
+}
+
+/**
+ * Remove a pane that has no tabs left (its last tab was closed or dragged out). The survivor's tabs are
+ * all in `PRIMARY_GROUP` afterwards and it is focused. Only `groupId` changes — never a tab id — so a host
+ * that renders tabs flat (see the note at the top) keeps every editor mounted. No-op unless split and one
+ * pane is empty. `moveTab`/`closeTab` deliberately leave an empty pane alone (a host may want to show it);
+ * call this after them when it should not.
+ */
+export function collapseEmptyGroup<T>(state: WorkspaceState<T>): WorkspaceState<T> {
+	if (state.groups.length < 2) return state;
+	const empty = state.groups.find((g) => tabsInGroup(state, g.id).length === 0);
+	if (empty === undefined) return state;
+	const survivor = state.groups.find((g) => g.id !== empty.id) ?? empty;
+	const tabs = state.tabs.map((t) => (t.groupId === PRIMARY_GROUP ? t : { ...t, groupId: PRIMARY_GROUP }));
+	return {
+		...state,
+		tabs,
+		groups: [{ id: PRIMARY_GROUP, activeTabId: survivor.activeTabId }],
 		focusedGroupId: PRIMARY_GROUP,
 	};
 }

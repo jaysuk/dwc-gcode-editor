@@ -18,6 +18,32 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-29 (v0.13.0, RELEASED: tagged, pushed, on npm): two files side by side, and the review of Duet3D/DuetWebControl#517 applied to our own code.**
+The maintainer (chrishamm) sent #517 back: every pane transition moved a `v-window-item` between two `v-window` parents, Vue cannot
+re-parent a component, so the editor unmounted and remounted (model disposed, file re-downloaded, unsaved edits gone; none of it checked
+`dirty`), the URL carried no pane (Back resolved the ordinal in the wrong pane), and it was too big for 3.7's rc phase. Checked against
+the PR diff (`v-for group` outside, `v-window` per group, `collapseEmptyGroup` renaming group ids): all accurate. **The same flaw was in
+our own `duet-gcode-postprocessor/GcodeWorkspace.vue`** (a per-pane `v-for`), and FL's `ExplorerPanel` had no split at all.
+
+- **`workspace.ts`**: new `collapseEmptyGroup(state)` (a pane with no tabs goes away; only `groupId` changes, never a tab id - hosts
+  call it after `moveTab`/`closeTab`, which deliberately still leave an empty pane alone, an existing test pins that). The file's header
+  now states the **rendering rule: draw tabs as ONE flat list keyed by `tab.id`, in a fixed (id) order, and place each in its pane with a
+  CSS grid column** - never as children of a per-pane element. A keyed `v-for` follows the order it is given by MOVING DOM nodes, and
+  measured in real Chrome a removed-and-reinserted node loses `scrollTop` (777 -> 0) while a `grid-column` change keeps node and scroll,
+  hence the id sort (`moveTab` reorders `tabs`). 358 tests (was 354), teeth-checked.
+- **Hosts (uncommitted, not released)**: `duet-gcode-postprocessor` `GcodeWorkspace.vue` rewritten to the flat grid (5 new tests +
+  the old drag test updated: emptying a pane now collapses the split), `Flexible-Layouts` `ExplorerPanel.vue` gains the split
+  (`model/explorerPanes.ts` adapts the session's mutable tab objects to `workspace.ts`; new `explorerSplit.test.ts`, 20 tests). Each
+  test asserts the SAME slot and `.cm-editor` element survive split / drag / close-split / a pane collapsing, with unsaved text and no
+  upload. Mutations that force a remount, drop the id sort, or drop focus-on-click each fail specific tests. FL's URL follows the FOCUSED
+  pane's file and resolves by path, so a deep link/Back to a file open in the other pane focuses it (no ordinal, so #517's URL problem
+  cannot occur); clicking a tab or focusing an editor focuses its pane (`v-tabs` says nothing for an already-selected tab).
+- Both hosts import `collapseEmptyGroup`, so they need this package's NEXT release and a pin bump (they pin `#v0.12.0`, which lacks it);
+  tested against an `npm pack` tarball installed `--no-save` (lockfiles untouched). Full suites: FL 1594 pass, postprocessor 1224;
+  `vue-tsc` on both (clean, with an injected error to prove the run had teeth). **Not verified in real Chrome**: the actual Vue
+  components (only the grid CSS was, in a static page) - happy-dom has no layout. Not gated: narrow tiles (PR #517 hid the split
+  below `lg`; here two panes just share the tile).
+
 **2026-09-29 (v0.12.0, RELEASED: tagged and pushed; `npm publish` NOT done - the hosts pin the git tag): Find Code can be dismissed, a check runs on load, live per-line checking, and a shortcuts help panel.**
 Three user asks, verified in real Chrome against the demo (Playwright from Flexible-Layouts' `node_modules`) as well as happy-dom.
 

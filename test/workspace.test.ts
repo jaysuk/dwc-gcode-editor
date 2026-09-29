@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	activeTab, canSplit, closeSplit, closeTab, createWorkspace, moveTab, openTab,
+	activeTab, canSplit, closeSplit, collapseEmptyGroup, closeTab, createWorkspace, moveTab, openTab,
 	PRIMARY_GROUP, SECONDARY_GROUP, setActiveTab, setDirty, setSplitRatio, splitRight, tabsInGroup,
 } from "../src/workspace";
 
@@ -221,5 +221,46 @@ describe("purity", () => {
 		closeTab(w, w.tabs[0].id);
 		splitRight(openTab(w, "b"));
 		expect(JSON.parse(JSON.stringify(w))).toEqual(frozen);
+	});
+});
+
+describe("collapseEmptyGroup", () => {
+	it("is a no-op with one pane, or while both panes have tabs", () => {
+		const single = openTab(createWorkspace("a"), "b");
+		expect(collapseEmptyGroup(single)).toBe(single);
+		const split = splitRight(single);
+		expect(collapseEmptyGroup(split)).toBe(split);
+	});
+
+	it("folds the survivor into the primary pane when the secondary pane empties, keeping every tab id", () => {
+		let w = splitRight(openTab(createWorkspace("a"), "b")); // a: PRIMARY, b: SECONDARY
+		const ids = w.tabs.map((t) => t.id);
+		const bId = w.tabs.find((t) => t.data === "b")!.id;
+		w = closeTab(w, bId);
+		expect(w.groups).toHaveLength(2); // closeTab leaves the empty pane alone
+		w = collapseEmptyGroup(w);
+		expect(w.groups.map((g) => g.id)).toEqual([PRIMARY_GROUP]);
+		expect(w.focusedGroupId).toBe(PRIMARY_GROUP);
+		expect(w.tabs.map((t) => t.data)).toEqual(["a"]);
+		expect(ids).toContain(w.tabs[0].id);
+	});
+
+	it("keeps the tabs of the pane that survived when the PRIMARY pane empties, without changing their ids", () => {
+		let w = splitRight(openTab(createWorkspace("a"), "b")); // a: PRIMARY, b: SECONDARY
+		const aId = w.tabs.find((t) => t.data === "a")!.id;
+		const bId = w.tabs.find((t) => t.data === "b")!.id;
+		w = moveTab(w, aId, SECONDARY_GROUP); // primary now empty; secondary holds b, a with a active
+		w = collapseEmptyGroup(w);
+		expect(w.groups.map((g) => g.id)).toEqual([PRIMARY_GROUP]);
+		expect(tabsInGroup(w, PRIMARY_GROUP).map((t) => t.id).sort()).toEqual([aId, bId].sort());
+		expect(activeTab(w, PRIMARY_GROUP)?.data).toBe("a");
+		expect(tabsInGroup(w, SECONDARY_GROUP)).toHaveLength(0);
+	});
+
+	it("does not renumber tabs that were already in the primary pane", () => {
+		let w = splitRight(openTab(openTab(createWorkspace("a"), "b"), "c")); // c: SECONDARY
+		const before = w.tabs.filter((t) => t.groupId === PRIMARY_GROUP).map((t) => [t.id, t.data]);
+		w = collapseEmptyGroup(closeTab(w, w.tabs.find((t) => t.data === "c")!.id));
+		expect(w.tabs.map((t) => [t.id, t.data])).toEqual(before);
 	});
 });
