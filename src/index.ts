@@ -1,5 +1,6 @@
 export * from "./workspace.js";
 export * from "./diagnostics.js";
+export * from "./liveCheck.js";
 export * from "./language.js";
 export * from "./docBuilder.js";
 export * from "./editorCore.js";
@@ -10,6 +11,7 @@ export * from "./search.js";
 export * from "./editorActions.js";
 export * from "./quickSearchData.js";
 export * from "./quickSearch.js";
+export * from "./shortcutsHelp.js";
 export * from "./customTheme.js";
 export * from "./colorSchemeStorage.js";
 export * from "./currentLine.js";

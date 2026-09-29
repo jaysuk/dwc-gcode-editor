@@ -72,7 +72,24 @@ function createPanel(view: EditorView, title: string, entries: ReadonlyArray<Qui
 	list.className = "cm-gcodeQuickSearch-list";
 	list.setAttribute("role", "listbox");
 
-	dom.append(input, list);
+	// The panel had no dismiss control: Escape only worked while the input still had focus, so after a
+	// click elsewhere (or on a toolbar button that opened it) there was no way to get rid of it.
+	const closeBtn = document.createElement("button");
+	closeBtn.type = "button";
+	closeBtn.className = "cm-gcodeQuickSearch-close";
+	closeBtn.textContent = "✕";
+	closeBtn.title = "Close (Esc)";
+	closeBtn.setAttribute("aria-label", "Close search");
+	// mousedown is cancelled so pressing the button does not first blur the input (which would close
+	// the panel through the focusout handler below, then let the click land on nothing).
+	closeBtn.addEventListener("mousedown", (e) => e.preventDefault());
+	closeBtn.addEventListener("click", () => { closeQuickSearch(view); view.focus(); });
+
+	const bar = document.createElement("div");
+	bar.className = "cm-gcodeQuickSearch-bar";
+	bar.append(input, closeBtn);
+
+	dom.append(bar, list);
 
 	let filtered: ReadonlyArray<QuickSearchEntry> = entries;
 	let selected = 0;
@@ -140,6 +157,21 @@ function createPanel(view: EditorView, title: string, entries: ReadonlyArray<Qui
 	}
 
 	input.addEventListener("input", () => filter(input.value));
+	// A click on the list's scrollbar must not blur the input (and so close the panel under the user).
+	list.addEventListener("mousedown", (e) => e.preventDefault());
+	// Focus moving anywhere outside the panel (a click in the document, another toolbar button, Tab)
+	// dismisses it, the way a menu does. A window switch also blurs the input but leaves the document
+	// without focus, so that case is ignored - the panel is still wanted when the user comes back.
+	// `gone` guards the browser's blur-on-removal: CM6 removes the panel's DOM inside a view update, and
+	// dispatching from there throws ("Calls to EditorView.update are not allowed while an update is in progress").
+	let gone = false;
+	dom.addEventListener("focusout", (e) => {
+		if (gone) return;
+		const next = e.relatedTarget as Node | null;
+		if (next !== null && dom.contains(next)) return;
+		if (next === null && !document.hasFocus()) return;
+		closeQuickSearch(view);
+	});
 	// Keydown is intercepted here (not left to CM6's own keymap) so ArrowUp/Down/Enter/Escape drive
 	// this list instead of moving the document cursor or falling through to another binding.
 	input.addEventListener("keydown", (e) => {
@@ -148,7 +180,7 @@ function createPanel(view: EditorView, title: string, entries: ReadonlyArray<Qui
 			case "ArrowDown": e.preventDefault(); selected = Math.min(selected + 1, filtered.length - 1); highlight(); break;
 			case "ArrowUp": e.preventDefault(); selected = Math.max(selected - 1, 0); highlight(); break;
 			case "Enter": e.preventDefault(); accept(); break;
-			case "Escape": e.preventDefault(); close(); view.focus(); break;
+			case "Escape": case "F4": e.preventDefault(); close(); view.focus(); break;
 			default: break;
 		}
 	});
@@ -159,12 +191,15 @@ function createPanel(view: EditorView, title: string, entries: ReadonlyArray<Qui
 		dom,
 		top: true,
 		mount() { input.focus(); },
+		destroy() { gone = true; },
 	};
 }
 
 const quickSearchTheme = EditorView.baseTheme({
 	".cm-gcodeQuickSearch": { padding: "4px" },
-	".cm-gcodeQuickSearch-input": { boxSizing: "border-box", width: "100%", padding: "4px 6px", font: "inherit" },
+	".cm-gcodeQuickSearch-bar": { display: "flex", gap: "4px", alignItems: "center" },
+	".cm-gcodeQuickSearch-input": { boxSizing: "border-box", flex: "1", minWidth: "0", padding: "4px 6px", font: "inherit" },
+	".cm-gcodeQuickSearch-close": { cursor: "pointer", background: "none", border: "none", color: "inherit", font: "inherit", padding: "2px 8px" },
 	".cm-gcodeQuickSearch-list": { maxHeight: "240px", overflowY: "auto", marginTop: "4px" },
 	".cm-gcodeQuickSearch-row": {
 		display: "flex", gap: "8px", padding: "3px 8px", cursor: "pointer", whiteSpace: "nowrap",

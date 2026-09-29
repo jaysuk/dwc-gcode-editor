@@ -18,6 +18,55 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-29 (v0.12.0, RELEASED: tagged and pushed; `npm publish` NOT done - the hosts pin the git tag): Find Code can be dismissed, a check runs on load, live per-line checking, and a shortcuts help panel.**
+Three user asks, verified in real Chrome against the demo (Playwright from Flexible-Layouts' `node_modules`) as well as happy-dom.
+
+- **`quickSearch.ts`**: the panel had no way out except Escape while its input still had focus. Now it has a close button,
+  closes when focus leaves it (a click in the document, another toolbar button), and `F4` inside it closes it. Two traps:
+  the focusout handler ignores a window switch (`relatedTarget` null while `!document.hasFocus()`), and a `gone` flag set by
+  the panel's `destroy()` stops the browser's blur-on-removal re-dispatching inside a CM6 update (that throws).
+- **`diagnostics.ts`**: `checkDocument(view, {path, firmwareVersion})` (parse + diagnose + `applyDiagnostics`, shared by the
+  manual button and the on-load check), `canAutoCheck(view)` and `AUTO_CHECK_MAX_CHARS` (5 MB). Measured against core:
+  ~0.27 s/MB synchronous (1 MB 0.34 s, 5 MB 1.3 s, 10 MB 2.7 s), so a bigger file keeps only the manual button.
+- **`shortcutsHelp.ts` (new)**: `GCODE_EDITOR_SHORTCUTS` (hand-kept table), `openShortcutsHelp(view, {hide?, mac?})` (toggles,
+  self-installs like `openSearchPanel`), `gcodeShortcutsHelp()` (`F1` + Escape), `formatShortcutKeys`. `hide` takes entry ids so a
+  host drops what it has not wired (postprocessor: `save`; Flexible-Layouts menu files: `quickSearch`, `completion`,
+  `blockComment`). The test cross-checks every CM6-backed entry against the REAL installed `defaultKeymap`/`searchKeymap`/
+  `historyKeymap`/`completionKeymap` (it caught `Shift-Mod-l` vs CM6's own `Mod-Shift-l` spelling - modifier order is
+  normalised), so a CM6 upgrade that moves a key fails a test. Its Escape binding is `Prec.high` - the base keymap's
+  `simplifySelection` claims Escape whenever there is a selection (the first version of that test was vacuous: no base
+  keymap in the mount; teeth-checked and rewritten).
+- **`liveCheck.ts` (new): `gcodeLiveCheck({getOptions, onChange?, ...delays})`, `diagnoseLine`.** Re-checks the lines being typed on
+  instead of the whole file. Read from core first: every single-document rule (`syntax/*`, `dictionary/*`, `objectModel/*`,
+  `structure/macro-command-not-last`, `structure/capitalised-meta-keyword`) loops over lines independently, so a line parses and
+  diagnoses alone in ~0.01 ms whatever the file size. Three timers: a line the cursor has LEFT (Enter, click elsewhere) after
+  100 ms; the line the cursor is ON after 1 s of pause; the whole file after 1.5 s, only up to `fullCheckMaxChars` (500 KB,
+  ~0.2 s). The line pass replaces only the diagnostics on the lines it checked (the rest keep their squiggles and move with the
+  text). Two things a lone line cannot know, both handled:
+  - **Block structure** (`else`/`elif` without `if`, `break`/`continue` outside a loop, mixed indentation): parsed alone,
+    `else` is "else without if". `diagnoseLine` filters those `DocumentError` codes (`BLOCK_ERROR_CODES`, mirrors core's
+    `isStructural` list minus `t-not-alone`, which IS line-local); they come back from the whole-file pass. A test asserts a
+    bare `else`/`elif`/`break`/`continue` alone gives nothing - a new structural code in core would need adding to the list.
+  - **`M453` machine mode**: `parseDocument` lexes each line in the mode set by the lines above (`( ... )` is a comment in
+    CNC/laser mode). Alone, `G1 X1 (a comment) Y2` gets false unknown-command findings (measured). So the line pass turns
+    itself off for any document containing `M453` (scanned lazily on first flush, then any checked line containing it flips
+    the flag for good) and the whole-file pass covers it. `M453` takes NO parameters in core's dictionary (my first fixture
+    `M453 P2 I0...` produced findings on the M453 line itself and made the tests vacuous).
+  - An insertion of whole lines at a line start ends its dirty range on the last inserted line, not the unchanged line below
+    (else editing above an orphan `else` would clear its squiggle until the next whole-file pass). Teeth-checked, as were the
+    filter, the active-line hold-back, the M453 guard (3 separate paths), keeping other lines' diagnostics, and the size cap.
+  - In real Chrome (demo, Playwright): typing shows nothing until the pause, then marks the line; an orphan `else` appears at
+    the whole-file pass; on a 30 MB / 2M-line file typing 13 chars took 64 ms with 5 ms event-loop latency and the typed line
+    was marked (on-load check correctly skipped over 5 MB). On a file over `fullCheckMaxChars` a block-structure error on an
+    edited line stays cleared until the manual check.
+- 354 tests (was 326). Demo has Find code / Shortcuts buttons, checks each file on open, and runs `gcodeLiveCheck`.
+- **Hosts wired, committed and pushed** (no host tag, by the user's instruction): `Flexible-Layouts/src/widgets/GcodeCmEditor.vue`
+  and `duet-gcode-postprocessor/src/components/GcodeEditor.vue` get a keyboard-icon Help button, `gcodeShortcutsHelp()`,
+  `checkOnLoad` (deferred one tick, superseded-load guarded, skipped for menu files and over the size cap) and
+  `gcodeLiveCheck` (non-menu only; `onChange` keeps the toolbar count current). Both pinned to `#v0.12.0` (the postprocessor
+  jumped from `#v0.10.0`, skipping 0.11.0's menu work it has no use for). Host tests plus teeth checks (FL 47 in
+  `gcodeCmEditor.test.ts`, postprocessor 132 in `component.test.ts`). `vue-tsc` on the SFCs was NOT run.
+
 **2026-09-29 (v0.11.0, RELEASED: tagged, pushed, on npm): `menuFile.ts` - 12864 menu files get real highlighting and diagnostics.**
 Why: Flexible-Layouts previews a menu file on its 12864 emulator, but DWC's Monaco exposes only `save()`/`focus()`, so the
 preview could only show the file as saved. Opening menu files in this editor lets the host read the live buffer.

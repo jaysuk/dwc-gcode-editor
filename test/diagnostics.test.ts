@@ -3,7 +3,9 @@ import { forEachDiagnostic } from "@codemirror/lint";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { Diagnostic as CoreDiagnostic } from "dwc-gcode-core";
-import { applyDiagnostics, gcodeLintUi, gcodeLiveLinter, toCmDiagnostics } from "../src/diagnostics";
+import {
+	AUTO_CHECK_MAX_CHARS, applyDiagnostics, canAutoCheck, checkDocument, gcodeLintUi, gcodeLiveLinter, toCmDiagnostics,
+} from "../src/diagnostics";
 
 function coreDiagnostic(overrides: Partial<CoreDiagnostic> = {}): CoreDiagnostic {
 	return {
@@ -114,5 +116,46 @@ describe("gcodeLiveLinter", () => {
 		expect(seen).toBe(1);
 		expect(calls).toBeGreaterThan(0);
 		view.destroy();
+	});
+});
+
+describe("checkDocument", () => {
+	function viewOf(doc: string): EditorView {
+		return new EditorView({ state: EditorState.create({ doc, extensions: [gcodeLintUi()] }), parent: document.createElement("div") });
+	}
+	function countIn(view: EditorView): number {
+		let n = 0;
+		forEachDiagnostic(view.state, () => n++);
+		return n;
+	}
+
+	it("checks the whole document with the real rules and shows the result in the editor", () => {
+		// M106 has no Q parameter (the demo's own known-bad line).
+		const view = viewOf("G1 X10\nM106 Q1\n");
+		const found = checkDocument(view, { path: "0:/macros/a.g", firmwareVersion: "3.6.0" });
+		expect(found.length).toBeGreaterThan(0);
+		expect(countIn(view)).toBe(found.length);
+		view.destroy();
+	});
+
+	it("reports nothing for a clean document and clears an earlier result", () => {
+		const view = viewOf("M106 Q1\n");
+		checkDocument(view, { path: "0:/macros/a.g" });
+		expect(countIn(view)).toBeGreaterThan(0);
+		view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "G1 X10\n" } });
+		expect(checkDocument(view, { path: "0:/macros/a.g" })).toEqual([]);
+		expect(countIn(view)).toBe(0);
+		view.destroy();
+	});
+});
+
+describe("canAutoCheck", () => {
+	it("is true up to the cap and false above it", () => {
+		const small = new EditorView({ state: EditorState.create({ doc: "G1 X1\n" }), parent: document.createElement("div") });
+		expect(canAutoCheck(small)).toBe(true);
+		small.destroy();
+		const big = new EditorView({ state: EditorState.create({ doc: "x".repeat(AUTO_CHECK_MAX_CHARS + 1) }), parent: document.createElement("div") });
+		expect(canAutoCheck(big)).toBe(false);
+		big.destroy();
 	});
 });

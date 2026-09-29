@@ -174,3 +174,57 @@ describe("openGcodeQuickSearch / openExpressionQuickSearch / closeQuickSearch", 
 		parent.remove();
 	});
 });
+
+describe("dismissing the quick-search panel", () => {
+	function open() {
+		const m = mount("G1 X10\n");
+		openGcodeQuickSearch(m.view);
+		return m;
+	}
+
+	it("has a close button that closes it", () => {
+		const { view, parent } = open();
+		const btn = parent.querySelector(".cm-gcodeQuickSearch-close") as HTMLButtonElement;
+		expect(btn).not.toBeNull();
+		btn.click();
+		expect(parent.querySelector(".cm-gcodeQuickSearch")).toBeNull();
+		view.destroy();
+		parent.remove();
+	});
+
+	it("closes when focus moves to something outside the panel", () => {
+		const { view, parent } = open();
+		const input = parent.querySelector(".cm-gcodeQuickSearch-input") as HTMLInputElement;
+		input.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: view.contentDOM }));
+		expect(parent.querySelector(".cm-gcodeQuickSearch")).toBeNull();
+		view.destroy();
+		parent.remove();
+	});
+
+	it("stays open while focus moves within the panel", () => {
+		const { view, parent } = open();
+		const input = parent.querySelector(".cm-gcodeQuickSearch-input") as HTMLInputElement;
+		const btn = parent.querySelector(".cm-gcodeQuickSearch-close") as HTMLButtonElement;
+		input.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: btn }));
+		expect(parent.querySelector(".cm-gcodeQuickSearch")).not.toBeNull();
+		view.destroy();
+		parent.remove();
+	});
+
+	it("F4 inside the panel closes it, like Escape", () => {
+		const { view, parent } = open();
+		const input = parent.querySelector(".cm-gcodeQuickSearch-input") as HTMLInputElement;
+		input.dispatchEvent(new KeyboardEvent("keydown", { key: "F4", bubbles: true, cancelable: true }));
+		expect(parent.querySelector(".cm-gcodeQuickSearch")).toBeNull();
+		view.destroy();
+		parent.remove();
+	});
+
+	it("does not throw when the panel is torn down while it holds focus", () => {
+		const { view, parent } = open();
+		(parent.querySelector(".cm-gcodeQuickSearch-input") as HTMLInputElement).focus();
+		expect(() => closeQuickSearch(view)).not.toThrow();
+		view.destroy();
+		parent.remove();
+	});
+});

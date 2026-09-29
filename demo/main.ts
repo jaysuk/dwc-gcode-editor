@@ -7,13 +7,15 @@
 
 import { lintGutter } from "@codemirror/lint";
 import { lineNumbers, EditorView } from "@codemirror/view";
-import { diagnoseDocument, parseDocument } from "dwc-gcode-core";
 
 import { gcodeCompletion } from "../src/completion";
 import { buildDocFromChunks, buildDocFromString } from "../src/docBuilder";
-import { applyDiagnostics, gcodeLintUi } from "../src/diagnostics";
+import { canAutoCheck, checkDocument, gcodeLintUi } from "../src/diagnostics";
 import { createEditorInstance, type EditorInstance } from "../src/editorCore";
 import { gcodeLanguage } from "../src/language";
+import { gcodeLiveCheck } from "../src/liveCheck";
+import { gcodeQuickSearchKeymap, openGcodeQuickSearch } from "../src/quickSearch";
+import { gcodeShortcutsHelp, openShortcutsHelp } from "../src/shortcutsHelp";
 import { createThemeController, type ThemeController } from "../src/theme";
 import {
 	activeTab, canSplit, closeSplit, closeTab, createWorkspace, moveTab, openTab,
@@ -62,7 +64,12 @@ function editorExtensions(tabId: number, theme: ThemeController) {
 		gcodeLanguage,
 		theme.extension,
 		gcodeCompletion(),
+		gcodeQuickSearchKeymap(),
+		gcodeShortcutsHelp(),
 		gcodeLintUi(),
+		gcodeLiveCheck({
+			getOptions: () => ({ path: workspace.tabs.find((t) => t.id === tabId)?.data.name ?? "untitled", firmwareVersion: fwInput.value.trim() || "3.7.0" }),
+		}),
 		lintGutter(),
 		// Live dirty tracking is a demo/host UI concern, not editorCore.ts's own job - that module
 		// only guarantees onFlush fires before destroy, it says nothing about when a host chooses
@@ -226,24 +233,32 @@ async function openFile(file: File): Promise<void> {
 	log(`Built ${doc.lines.toLocaleString()} lines in ${ms} ms`);
 	workspace = openTab(workspace, { name: file.name, initialDoc: doc });
 	render();
+	checkOnLoad(workspace.tabs[workspace.tabs.length - 1]!.id, file.name);
 }
 
-async function checkForErrors(): Promise<void> {
-	const tab = activeTab(workspace, workspace.focusedGroupId);
-	if (tab === null) return;
-	const instance = instances.get(tab.id);
+function checkTab(tabId: number, name: string, why: string): void {
+	const instance = instances.get(tabId);
 	if (instance === undefined) return;
-
 	const t0 = performance.now();
-	// A whole-document string round-trip - the documented, accepted cost of a MANUAL check
-	// (diagnostics.ts's own module comment explains why this is never done automatically).
-	const text = instance.view.state.doc.toString();
-	const parsed = parseDocument(text);
-	const firmwareVersion = fwInput.value.trim() || "3.7.0";
-	const diagnostics = diagnoseDocument(parsed, tab.data.name, { firmwareVersion });
-	applyDiagnostics(instance.view, diagnostics);
+	// A whole-document string round-trip - the documented, accepted cost of a check (diagnostics.ts's
+	// own module comment explains why it is never done on every keystroke).
+	const diagnostics = checkDocument(instance.view, { path: name, firmwareVersion: fwInput.value.trim() || "3.7.0" });
 	const ms = (performance.now() - t0).toFixed(0);
-	log(`Checked "${tab.data.name}": ${diagnostics.length} diagnostic(s) in ${ms} ms`);
+	log(`${why} "${name}": ${diagnostics.length} diagnostic(s) in ${ms} ms`);
+}
+
+function checkForErrors(): void {
+	const tab = activeTab(workspace, workspace.focusedGroupId);
+	if (tab !== null) checkTab(tab.id, tab.data.name, "Checked");
+}
+
+/** Runs the check once right after a file is loaded, unless it is too big to do without freezing the page. */
+function checkOnLoad(tabId: number, name: string): void {
+	const instance = instances.get(tabId);
+	if (instance === undefined) return;
+	if (!canAutoCheck(instance.view)) { log(`"${name}" is too large to check automatically - use Check for errors.`); return; }
+	// Deferred so the editor paints first.
+	setTimeout(() => checkTab(tabId, name, "Checked on load"), 0);
 }
 
 document.getElementById("btn-open")!.addEventListener("click", () => {
@@ -267,7 +282,17 @@ document.getElementById("btn-close-split")!.addEventListener("click", () => {
 	workspace = closeSplit(workspace);
 	render();
 });
-document.getElementById("btn-check")!.addEventListener("click", () => void checkForErrors());
+document.getElementById("btn-check")!.addEventListener("click", () => checkForErrors());
+document.getElementById("btn-find-code")!.addEventListener("click", () => {
+	const tab = activeTab(workspace, workspace.focusedGroupId);
+	const instance = tab === null ? undefined : instances.get(tab.id);
+	if (instance !== undefined) openGcodeQuickSearch(instance.view);
+});
+document.getElementById("btn-help")!.addEventListener("click", () => {
+	const tab = activeTab(workspace, workspace.focusedGroupId);
+	const instance = tab === null ? undefined : instances.get(tab.id);
+	if (instance !== undefined) openShortcutsHelp(instance.view);
+});
 darkChk.addEventListener("change", () => {
 	for (const [tabId, instance] of instances) {
 		themeControllers.get(tabId)?.setDark(instance.view, darkChk.checked);
@@ -275,4 +300,5 @@ darkChk.addEventListener("change", () => {
 });
 
 render();
+checkOnLoad(workspace.tabs[0]!.id, workspace.tabs[0]!.data.name);
 log("Ready. Open a real .g/.gcode file, or edit the sample tab and click Check for errors.");

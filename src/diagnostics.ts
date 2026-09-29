@@ -23,13 +23,14 @@
  * `gcodeLintUi` (installs the squiggles/gutter/hover machinery with **no** automatic source, safe for
  * files of any size), and `gcodeLiveLinter` (the opt-in, real `linter()`-backed automatic extension,
  * for a host that has already decided a specific document is small enough for live linting to be
- * worth its cost).
+ * worth its cost). `checkDocument` bundles the manual check, and `canAutoCheck` says whether a
+ * document is small enough for a host to run it once right after loading.
  */
 
 import { linter, setDiagnostics, type Diagnostic as CmDiagnostic, type LintSource } from "@codemirror/lint";
 import type { Extension } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
-import type { Diagnostic as CoreDiagnostic } from "dwc-gcode-core";
+import { diagnoseDocument, parseDocument, type Diagnostic as CoreDiagnostic } from "dwc-gcode-core";
 
 /** Pure field mapping — see the module doc comment for why there is no offset or severity conversion. */
 export function toCmDiagnostics(diagnostics: ReadonlyArray<CoreDiagnostic>): Array<CmDiagnostic> {
@@ -47,6 +48,40 @@ export function toCmDiagnostics(diagnostics: ReadonlyArray<CoreDiagnostic>): Arr
  *  extensions, the same way CM6's own `setDiagnostics` requires `linter(...)` to be installed. */
 export function applyDiagnostics(view: EditorView, diagnostics: ReadonlyArray<CoreDiagnostic>): void {
 	view.dispatch(setDiagnostics(view.state, toCmDiagnostics(diagnostics)));
+}
+
+/**
+ * The largest document (in characters) a host should check automatically right after loading it.
+ * A check is a synchronous whole-document parse + diagnose costing about 0.27 s per MB (measured
+ * against `dwc-gcode-core` with a mixed-G-code fixture: 1 MB 0.34 s, 5 MB 1.3 s, 10 MB 2.7 s), and it
+ * blocks the page while it runs — fine once per load for an ordinary macro or print file, not for the
+ * 100 MB+ files this package otherwise keeps interactive. Above this size the manual "Check for
+ * errors" button is still there.
+ */
+export const AUTO_CHECK_MAX_CHARS = 5_000_000;
+
+/** Whether `view`'s document is small enough to check automatically on load (`AUTO_CHECK_MAX_CHARS`). */
+export function canAutoCheck(view: EditorView): boolean {
+	return view.state.doc.length <= AUTO_CHECK_MAX_CHARS;
+}
+
+export interface CheckDocumentOptions {
+	/** The file's path — some rules depend on where the file lives (e.g. `config.g` vs a macro). */
+	path: string;
+	/** Firmware version to check against; `"0.0.0"` (what both hosts already use when the machine has
+	 *  not reported one) when omitted. */
+	firmwareVersion?: string;
+}
+
+/** Runs `dwc-gcode-core`'s checks over the whole document and pushes the result into the editor
+ *  (`applyDiagnostics`). Returns the diagnostics so a host can show a count. Shared by the manual
+ *  "Check for errors" button and the on-load check, so the two can never disagree. Synchronous and
+ *  whole-document — see `AUTO_CHECK_MAX_CHARS` before calling it unprompted. */
+export function checkDocument(view: EditorView, options: CheckDocumentOptions): ReadonlyArray<CoreDiagnostic> {
+	const parsed = parseDocument(view.state.doc.toString());
+	const diagnostics = diagnoseDocument(parsed, options.path, { firmwareVersion: options.firmwareVersion ?? "0.0.0" });
+	applyDiagnostics(view, diagnostics);
+	return diagnostics;
 }
 
 /** Installs the diagnostics UI (squiggly underlines, hover tooltips) with **no** automatic source —
