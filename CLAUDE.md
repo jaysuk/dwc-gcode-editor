@@ -18,6 +18,31 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-30 (v0.14.0, RELEASED: tagged, pushed, on npm): tab width, tabs-to-spaces on save, show-whitespace toggle.**
+User ask: a toolbar button that toggles showing spaces/tabs; saving converts tabs to spaces (default 1 tab = 4 spaces, configurable -
+in Flexible-Layouts on its Settings page beside the editor switch); the Tab key follows the same setting.
+
+- **`indentation.ts` (new)**: `DEFAULT_TAB_WIDTH` 4, `normaliseTabWidth` (1..16, junk -> 4), `gcodeIndentation(w)` (`indentUnit.of(spaces)`
+  + `EditorState.tabSize.of(w)`), `createIndentationController(w)` (Compartment, `setTabWidth(view, w)` live), `createWhitespaceController()`
+  (Compartment around `highlightWhitespace`+`highlightTrailingWhitespace`; `toggle(view)`), `lineTabsToSpaces`/`tabsToSpaces`/
+  `convertTabsToSpaces(view, w)`. `editorCore.ts` now installs `DEFAULT_INDENTATION` at `Prec.lowest`: **`indentUnit`'s combine takes the FIRST
+  value**, so a default at normal precedence would beat every host's setting; before this nothing set it, so Tab was CM6's own 2 spaces.
+  The Tab key needed no code change (`indentOrInsertTab`/`indentMore`/`indentLess` already read `indentUnit`).
+- **Conversion rule**: leading whitespace keeps its visual width (a tab advances to the next multiple of `w`, so `"  \t"` is 4 at w=4);
+  a tab elsewhere is exactly `w` spaces; a tab inside a `"quoted string"` is left alone (it is the string's content); comments are converted.
+  `convertTabsToSpaces` touches only lines containing a tab, one undo step, refuses a read-only state. Hosts call it right before reading the
+  document to save, so the editor and the card agree. There is deliberately NO "off" switch (not asked for) - a file that wants tabs cannot keep them.
+- 381 tests (was 362); teeth-checked (default indentation removed, quote guard, leading column-awareness, read-only guard each fail specific tests).
+- **Flexible-Layouts (committed and pushed to `main`, pinned `#v0.14.0`, tested against an `npm pack` first)**: `model/editorIndentSettings.ts` (shared refs `editorTabWidth`/`editorShowWhitespace`, localStorage),
+  `GcodeCmEditor.vue` (pilcrow toolbar toggle, both controllers, watches so every open editor follows, `convertTabsToSpaces` in `save()`),
+  `FlexSettingsTab.vue` (a 1-8 select under the editor switches), 3 i18n keys. FL suite 1607 pass. `vue-tsc` on the SFCs NOT run; not seen in a real browser.
+  `duet-gcode-postprocessor` untouched (its editor never saves, and has no settings page entry for this) - it gets the 4-space Tab on its next bump.
+
+**2026-09-30 (no change in THIS package): `G1 H1` endstops read from the machine's object model.** Core gained
+`endstopsFromObjectModel`/`mergeEndstops`/`RunSimulationOptions.machineEndstops` and both hosts pass `machineStore.model` through
+(the scenario panel shows what the machine says; anything set in the scenario overrides it per field). Uncommitted in core and both
+hosts, core 1.31.0 not released - the hosts were tested against an `npm pack` of it. See core's CHANGELOG "Unreleased".
+
 **2026-09-29 (v0.13.1, RELEASED: tagged and pushed; `npm publish` NOT done - the hosts pin the git tag): stepping no longer scrolls the page.**
 User report: in Flexible-Layouts, clicking Step through file made the full-height page jump down. `setCurrentLine` used
 `EditorView.scrollIntoView(pos, {y: "center"})`, and CM6's `scrollRectIntoView` climbs EVERY ancestor: whatever centring the editor's own

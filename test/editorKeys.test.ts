@@ -62,7 +62,7 @@ describe("Tab", () => {
 		const instance = make("if true\nG28\nG1 X10\nM84");
 		instance.view.dispatch({ selection: { anchor: 8, head: 16 } }); // G28 and G1 X10
 		tab(instance.view);
-		expect(instance.view.state.doc.toString()).toBe("if true\n  G28\n  G1 X10\nM84");
+		expect(instance.view.state.doc.toString()).toBe("if true\n    G28\n    G1 X10\nM84");
 		instance.destroy();
 	});
 
@@ -70,13 +70,13 @@ describe("Tab", () => {
 		const instance = make("G1 X10");
 		instance.view.dispatch({ selection: { anchor: 3, head: 6 } });
 		tab(instance.view);
-		expect(instance.view.state.doc.toString()).toBe("  G1 X10");
+		expect(instance.view.state.doc.toString()).toBe("    G1 X10");
 		instance.destroy();
 	});
 
 	it("Shift-Tab dedents the selected lines", () => {
-		const instance = make("  G28\n  G1 X10");
-		instance.view.dispatch({ selection: { anchor: 0, head: 14 } });
+		const instance = make("    G28\n    G1 X10");
+		instance.view.dispatch({ selection: { anchor: 0, head: 18 } });
 		tab(instance.view, true);
 		expect(instance.view.state.doc.toString()).toBe("G28\nG1 X10");
 		instance.destroy();
@@ -86,8 +86,8 @@ describe("Tab", () => {
 		const instance = make("G1 X10");
 		instance.view.dispatch({ selection: { anchor: 3 } });
 		tab(instance.view);
-		expect(instance.view.state.doc.toString()).toBe("G1   X10");
-		expect(instance.view.state.selection.main.head).toBe(5);
+		expect(instance.view.state.doc.toString()).toBe("G1     X10");
+		expect(instance.view.state.selection.main.head).toBe(7);
 		instance.destroy();
 	});
 

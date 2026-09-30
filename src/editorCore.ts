@@ -20,6 +20,7 @@ import { EditorState, Text, type Extension } from "@codemirror/state";
 import { indentUnit } from "@codemirror/language";
 import { EditorView, keymap, type Command } from "@codemirror/view";
 import { gcodeTooltipPlacement } from "./tooltipPlacement.js";
+import { DEFAULT_INDENTATION } from "./indentation.js";
 
 /**
  * Undo/redo history plus CM6's standard editing keybindings (word/line navigation, indent,
@@ -57,7 +58,8 @@ import { gcodeTooltipPlacement } from "./tooltipPlacement.js";
  * indent unit and `Shift-Tab` dedents them; with a bare cursor, `Tab` inserts one indent unit AT the
  * cursor (unlike `indentWithTab`, which would indent the whole line from mid-line) and `Shift-Tab`
  * dedents the line. Uses the state's `indentUnit` rather than `insertTab`'s hard-coded `"	"`, so a
- * cursor Tab and a selection Tab agree and `gcodeIndentGuides()`'s column counting stays consistent.
+ * cursor Tab and a selection Tab agree and `gcodeIndentGuides()`'s column counting stays consistent. The
+ * unit is `indentation.ts`'s tab width in SPACES (default 4, host-configurable), never a tab character.
  * CM6's own `Ctrl-m` (`toggleTabFocusMode`) and `Escape` still release the trap for keyboard users.
  */
 const indentOrInsertTab: Command = (view) => {
@@ -81,6 +83,8 @@ const indentOrInsertTab: Command = (view) => {
 const blockCommentFallback = { key: "Alt-A", mac: "Ctrl-A", run: toggleComment };
 
 const BASE_EDITING_EXTENSIONS: ReadonlyArray<Extension> = [
+	// 4 spaces per indent unless a host configures otherwise (`indentation.ts`); lowest precedence.
+	DEFAULT_INDENTATION,
 	history(),
 	closeBrackets(),
 	keymap.of([

@@ -7,6 +7,7 @@ export * from "./editorCore.js";
 export * from "./theme.js";
 export * from "./completion.js";
 export * from "./editingExtras.js";
+export * from "./indentation.js";
 export * from "./search.js";
 export * from "./editorActions.js";
 export * from "./quickSearchData.js";
