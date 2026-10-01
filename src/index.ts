@@ -1,6 +1,7 @@
 export * from "./workspace.js";
 export * from "./diagnostics.js";
 export * from "./liveCheck.js";
+export * from "./impactCheck.js";
 export * from "./language.js";
 export * from "./docBuilder.js";
 export * from "./editorCore.js";

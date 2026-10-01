@@ -18,6 +18,24 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
+**2026-09-30 (v0.15.0, NOT released: version bumped, nothing tagged or published; needs `dwc-gcode-core` 1.33.0 published first): "changed since <version>" squiggles.**
+Firmware-change notifications, editor half (plan: `Flexible-Layouts/FIRMWARE-CHANGES-PLAN.md`, workstream B). Tested against an `npm pack` of core 1.33.0.
+
+- **`impactCheck.ts` (new)**: `gcodeImpactCheck({ getRange, path, isAcknowledged?, onIgnore?, onFinding?, rules?, ... })` marks the lines that use a
+  command/parameter/object-model path/syntax feature whose behaviour changed between `getRange().from` and `.to` (core's `impactOf` +
+  `impactToDiagnostics`). `getRange() === null`, an unchanged range, a non-G-code path (`isScannable`) or a document over `maxChars` turns it off. It runs
+  once after load (`initialDelayMs`) and `delayMs` after the last edit, and NOT in the single-line pass of `liveCheck.ts` (`impactOf` is
+  document-wide; a line alone cannot see an `M453` above it). `refreshImpactCheck(view)` re-runs it when the range/acknowledged set/path change.
+  The pure `impactDiagnostics(text, range, path, options)` is exported for a host that wants the squiggles for a file that is not open.
+- **Coexistence rule**: `@codemirror/lint` holds ONE diagnostic set and `setDiagnostics` replaces all of it. This extension writes `existing - its own
+  (source === IMPACT_SOURCE, "rrf-changes") + fresh`, and `applyDiagnostics` (the Check button, the on-load check) now keeps the impact
+  ones in turn. Any host code that dispatches `setDiagnostics` itself must do the same or it will wipe them. `liveCheck.ts`'s single-line pass
+  only drops diagnostics on the lines it re-checks, so it leaves the rest alone.
+- Each diagnostic is an `ImpactDiagnostic` (`rule`, `eventId` extra fields survive CM's `{...d}` copies): hover shows the description, "Changed in <version>"
+  and the citation (`renderMessage`); the optional "Ignore this change" action calls `onIgnore(eventId)` then refreshes.
+- 396 tests (was 381); teeth-checked (dropping `...own` from `applyDiagnostics`, or keeping the old own diagnostics in a re-run, each fail specific tests).
+  Not seen in a real browser.
+
 **2026-09-30 (v0.14.0, RELEASED: tagged, pushed, on npm): tab width, tabs-to-spaces on save, show-whitespace toggle.**
 User ask: a toolbar button that toggles showing spaces/tabs; saving converts tabs to spaces (default 1 tab = 4 spaces, configurable -
 in Flexible-Layouts on its Settings page beside the editor switch); the Tab key follows the same setting.

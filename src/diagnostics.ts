@@ -27,10 +27,11 @@
  * document is small enough for a host to run it once right after loading.
  */
 
-import { linter, setDiagnostics, type Diagnostic as CmDiagnostic, type LintSource } from "@codemirror/lint";
+import { forEachDiagnostic, linter, setDiagnostics, type Diagnostic as CmDiagnostic, type LintSource } from "@codemirror/lint";
 import type { Extension } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { diagnoseDocument, parseDocument, type Diagnostic as CoreDiagnostic } from "dwc-gcode-core";
+import { isImpactDiagnostic } from "./impactCheck.js";
 
 /** Pure field mapping — see the module doc comment for why there is no offset or severity conversion. */
 export function toCmDiagnostics(diagnostics: ReadonlyArray<CoreDiagnostic>): Array<CmDiagnostic> {
@@ -47,7 +48,11 @@ export function toCmDiagnostics(diagnostics: ReadonlyArray<CoreDiagnostic>): Arr
  *  button calls. Requires `gcodeLintUi` (or `gcodeLiveLinter`) to already be part of the editor's
  *  extensions, the same way CM6's own `setDiagnostics` requires `linter(...)` to be installed. */
 export function applyDiagnostics(view: EditorView, diagnostics: ReadonlyArray<CoreDiagnostic>): void {
-	view.dispatch(setDiagnostics(view.state, toCmDiagnostics(diagnostics)));
+	// `setDiagnostics` replaces the editor's WHOLE set, so keep the "changed since <version>" squiggles
+	// (`impactCheck.ts`): they belong to a different check and have their own refresh.
+	const own: Array<CmDiagnostic> = [];
+	forEachDiagnostic(view.state, (d, from, to) => { if (isImpactDiagnostic(d)) own.push({ ...d, from, to }); });
+	view.dispatch(setDiagnostics(view.state, [...toCmDiagnostics(diagnostics), ...own]));
 }
 
 /**
