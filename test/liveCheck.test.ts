@@ -202,7 +202,7 @@ describe("gcodeLiveCheck", () => {
 		const { view } = mount("G1 X1");
 		type(view, view.state.doc.length, " (a comment) Y2");
 		vi.advanceTimersByTime(1100);
-		expect(found(view).some(([, r]) => r === "dictionary/unknown-command")).toBe(true);
+		expect(found(view).some(([, r]) => r === "syntax/text-after-command")).toBe(true);
 		view.destroy();
 	});
 

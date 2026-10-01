@@ -46,6 +46,51 @@ describe("toCmDiagnostics", () => {
 	});
 });
 
+describe("a core diagnostic's fixes", () => {
+	const fixed = (overrides: Partial<CoreDiagnostic> = {}): CoreDiagnostic => coreDiagnostic({
+		start: 10, end: 14, fixes: [{ title: "Turn into a comment", edits: [{ start: 10, end: 10, newText: "; " }] }], ...overrides,
+	});
+
+	it("become actions named after the fix, and a diagnostic without fixes has none", () => {
+		const [withFix, without] = toCmDiagnostics([fixed(), coreDiagnostic()]);
+		expect(withFix.actions?.map((a) => a.name)).toEqual(["Turn into a comment"]);
+		expect(without.actions).toBeUndefined();
+		expect(toCmDiagnostics([fixed({ fixes: [] })])[0].actions).toBeUndefined();
+	});
+
+	function open(doc: string): { view: EditorView; actions: () => Array<{ from: number; to: number; apply: (v: EditorView, f: number, t: number) => void }> } {
+		const view = new EditorView({ state: EditorState.create({ doc, extensions: [gcodeLintUi()] }), parent: document.createElement("div") });
+		return {
+			view,
+			actions: () => {
+				const found: Array<{ from: number; to: number; apply: (v: EditorView, f: number, t: number) => void }> = [];
+				forEachDiagnostic(view.state, (d, from, to) => { for (const a of d.actions ?? []) found.push({ from, to, apply: a.apply }); });
+				return found;
+			},
+		};
+	}
+
+	it("apply the edit at the diagnostic's position", () => {
+		const { view, actions } = open("M104 S200 heat up\n");
+		applyDiagnostics(view, [fixed()]);
+		const [a] = actions();
+		a.apply(view, a.from, a.to);
+		expect(view.state.doc.toString()).toBe("M104 S200 ; heat up\n");
+		view.destroy();
+	});
+
+	it("follow the squiggle when text above it has been edited since the check", () => {
+		const { view, actions } = open("M104 S200 heat up\n");
+		applyDiagnostics(view, [fixed()]);
+		view.dispatch({ changes: { from: 0, insert: "G28\n" } });
+		const [a] = actions();
+		expect(a.from).toBe(14);
+		a.apply(view, a.from, a.to);
+		expect(view.state.doc.toString()).toBe("G28\nM104 S200 ; heat up\n");
+		view.destroy();
+	});
+});
+
 describe("applyDiagnostics", () => {
 	it("pushes diagnostics into a real editor that has gcodeLintUi installed", () => {
 		const state = EditorState.create({ doc: "G90 G1 Z5\nG1 X1 Y1", extensions: [gcodeLintUi()] });

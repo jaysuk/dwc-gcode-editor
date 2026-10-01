@@ -18,7 +18,14 @@ real 200 MB/5.8M-line fixture — constant-time interaction regardless of size, 
 
 ## Status
 
-**2026-09-30 (v0.15.0, NOT released: version bumped, nothing tagged or published; needs `dwc-gcode-core` 1.33.0 published first): "changed since <version>" squiggles.**
+**2026-10-01 (v0.16.0, RELEASED: tagged and pushed; hosts pin the git tag): a core diagnostic's quick fixes show as buttons in the squiggle's tooltip.**
+`diagnostics.ts`'s `toCmDiagnostics` turns `CoreDiagnostic.fixes` into CM `actions` (one per fix, named by the fix's `title`); each applies the fix's edits shifted by
+how far the squiggle has moved since the diagnostic was made (CM maps the range through later edits; an edit inside the squiggle drops it and the next check replaces it).
+Needs core >= 1.34.0 to be useful - its `syntax/bad-command` and `syntax/text-after-command` are the first rules that carry `fixes` ("Turn the line into a comment");
+the dependency is now `^1.34.0`. One existing test changed: `G1 X1 (a comment) Y2` outside CNC mode is now `syntax/text-after-command`, not `dictionary/unknown-command`.
+399 tests (was 396). Not seen in a real browser.
+
+**2026-09-30 (v0.15.0, RELEASED: tagged and pushed): "changed since <version>" squiggles.**
 Firmware-change notifications, editor half (plan: `Flexible-Layouts/FIRMWARE-CHANGES-PLAN.md`, workstream B). Tested against an `npm pack` of core 1.33.0.
 
 - **`impactCheck.ts` (new)**: `gcodeImpactCheck({ getRange, path, isAcknowledged?, onIgnore?, onFinding?, rules?, ... })` marks the lines that use a

@@ -27,21 +27,37 @@
  * document is small enough for a host to run it once right after loading.
  */
 
-import { forEachDiagnostic, linter, setDiagnostics, type Diagnostic as CmDiagnostic, type LintSource } from "@codemirror/lint";
+import { forEachDiagnostic, linter, setDiagnostics, type Action, type Diagnostic as CmDiagnostic, type LintSource } from "@codemirror/lint";
 import type { Extension } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { diagnoseDocument, parseDocument, type Diagnostic as CoreDiagnostic } from "dwc-gcode-core";
 import { isImpactDiagnostic } from "./impactCheck.js";
 
+/**
+ * A core diagnostic's `fixes` as the buttons in the squiggle's tooltip. The edits are offsets into the text the diagnostic was
+ * made from, so they are shifted by how far the squiggle has moved since (CM maps it through later edits); an edit made inside
+ * the squiggle's own range would make that shift wrong, but CM drops a diagnostic whose range collapses, and the next check
+ * replaces it.
+ */
+function actionsOf(d: CoreDiagnostic): Array<Action> | undefined {
+	if (d.fixes === undefined || d.fixes.length === 0) return undefined;
+	return d.fixes.map((fix) => ({
+		name: fix.title,
+		apply: (view: EditorView, from: number) => {
+			const shift = from - d.start;
+			view.dispatch({ changes: fix.edits.map((e) => ({ from: e.start + shift, to: e.end + shift, insert: e.newText })) });
+		},
+	}));
+}
+
 /** Pure field mapping — see the module doc comment for why there is no offset or severity conversion. */
 export function toCmDiagnostics(diagnostics: ReadonlyArray<CoreDiagnostic>): Array<CmDiagnostic> {
-	return diagnostics.map((d) => ({
-		from: d.start,
-		to: d.end,
-		severity: d.severity,
-		message: d.message,
-		source: d.rule,
-	}));
+	return diagnostics.map((d) => {
+		const cm: CmDiagnostic = { from: d.start, to: d.end, severity: d.severity, message: d.message, source: d.rule };
+		const actions = actionsOf(d);
+		if (actions !== undefined) cm.actions = actions;
+		return cm;
+	});
 }
 
 /** Push a one-off set of `dwc-gcode-core` diagnostics into the editor — what a "Check for errors"
