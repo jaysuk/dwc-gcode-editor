@@ -796,5 +796,6 @@ sequencing steps 3–4).
 
 ## Releasing
 
-Bump `package.json`, commit, `git tag vX.Y.Z && git push origin vX.Y.Z` — the release workflow tests,
-then publishes a GitHub Release with the shared changelog. `npm publish` is manual.
+Bump `package.json`, commit, `git tag vX.Y.Z && git push origin vX.Y.Z` — the shared `npm-release.yml`
+workflow (`jaysuk/dwc-plugin-workflows`) tests, publishes to npm (trusted publishing: no token, provenance
+attached) and creates the GitHub Release. Don't `npm publish` by hand.
